@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Equity Heatmap</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Health Equity Heatmap</h1>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="measure-select">Select Health Measure:</label>
+                    <select id="measure-select">
+                        <option value="">Loading measures...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <button id="toggle-sdoh" class="btn-secondary">Toggle SDOH Data</button>
+                    <button id="refresh-data" class="btn-primary">Refresh Data</button>
+                </div>
+            </div>
+        </header>
+        
+        <div class="dashboard">
+            <div id="map" class="map-container"></div>
+            <div class="sidebar">
+                <div id="stats-panel" class="stats-panel">
+                    <h3>Area Statistics</h3>
+                    <div id="stats-content">
+                        <p>Select a health measure from the dropdown to view data on the map.</p>
+                    </div>
+                </div>
+                <div id="loading" class="loading hidden">
+                    <p>Loading data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
