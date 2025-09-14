@@ -574,3 +574,13 @@ header h1 {
     color: #555;
     font-size: 0.9rem;
 }
+
+/* Split marker styles */
+.split-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
+.split-marker div {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}

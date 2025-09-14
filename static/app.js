@@ -82,45 +82,55 @@ class HealthEquityMap {
         const lowColor = '#ffffff';
         let highColor, dataType;
         
-        if (this.showOverlay) {
-            highColor = '#8B0080';
-            dataType = 'Overlay Data';
-        } else if (this.showSDOH) {
-            highColor = '#0066cc';
-            dataType = 'SDOH Data';
-        } else {
-            highColor = '#8B0000';
-            dataType = 'Health Data';
-        }
-        
         const lowDescription = 'Low';
         const highDescription = 'High';
         const viewType = this.isStateView ? 'State-level aggregation' : 'County-level data';
         
-        let legendContent = `
-            <h4>Data Value Legend</h4>
-            <div class="legend-gradient" style="
-                height: 20px; 
-                background: linear-gradient(to right, ${lowColor}, ${highColor}); 
-                border-radius: 4px; 
-                margin: 0.5rem 0;
-                border: 1px solid #ddd;
-            "></div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
-                <span>${lowDescription}</span>
-                <span>${highDescription}</span>
-            </div>
-            <hr style="margin: 0.5rem 0;">
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>Data Type:</strong> ${dataType}
-            </p>
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>View:</strong> ${viewType}
-            </p>
-        `;
+        let legendContent;
         
         if (this.showOverlay) {
-            legendContent += `
+            // Overlay mode: show two separate gradient bars
+            legendContent = `
+                <h4>Data Value Legend</h4>
+                <div style="margin-bottom: 0.5rem;">
+                    <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666; font-weight: bold;">
+                        Health Data (Left Half)
+                    </p>
+                    <div class="legend-gradient" style="
+                        height: 15px; 
+                        background: linear-gradient(to right, ${lowColor}, #8B0000); 
+                        border-radius: 4px; 
+                        margin: 0.25rem 0;
+                        border: 1px solid #ddd;
+                    "></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #666; margin-bottom: 0.5rem;">
+                        <span>${lowDescription}</span>
+                        <span>${highDescription}</span>
+                    </div>
+                </div>
+                <div style="margin-bottom: 0.5rem;">
+                    <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666; font-weight: bold;">
+                        SDOH Data (Right Half)
+                    </p>
+                    <div class="legend-gradient" style="
+                        height: 15px; 
+                        background: linear-gradient(to right, ${lowColor}, #0066cc); 
+                        border-radius: 4px; 
+                        margin: 0.25rem 0;
+                        border: 1px solid #ddd;
+                    "></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #666; margin-bottom: 0.5rem;">
+                        <span>${lowDescription}</span>
+                        <span>${highDescription}</span>
+                    </div>
+                </div>
+                <hr style="margin: 0.5rem 0;">
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>Data Type:</strong> Overlay Data
+                </p>
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>View:</strong> ${viewType}
+                </p>
                 <hr style="margin: 0.5rem 0;">
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
                     <strong>Health Measure:</strong> ${this.currentHealthMeasure ? this.currentHealthMeasure.substring(0, 40) + '...' : 'None selected'}
@@ -128,15 +138,54 @@ class HealthEquityMap {
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
                     <strong>SDOH Measure:</strong> ${this.currentSDOHMeasure ? this.currentSDOHMeasure.substring(0, 40) + '...' : 'None selected'}
                 </p>
+                <hr style="margin: 0.5rem 0;">
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>All 50 states + DC included</strong>
+                </p>
+            `;
+        } else {
+            // Regular mode: single gradient bar
+            let highColor, dataType;
+            
+            if (this.showSDOH) {
+                highColor = '#0066cc';
+                dataType = 'SDOH Data';
+            } else {
+                highColor = '#8B0000';
+                dataType = 'Health Data';
+            }
+            
+            legendContent = `
+                <h4>Data Value Legend</h4>
+                <div class="legend-gradient" style="
+                    height: 20px; 
+                    background: linear-gradient(to right, ${lowColor}, ${highColor}); 
+                    border-radius: 4px; 
+                    margin: 0.5rem 0;
+                    border: 1px solid #ddd;
+                "></div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
+                    <span>${lowDescription}</span>
+                    <span>${highDescription}</span>
+                </div>
+                <hr style="margin: 0.5rem 0;">
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>Data Type:</strong> ${dataType}
+                </p>
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>View:</strong> ${viewType}
+                </p>
             `;
         }
         
-        legendContent += `
-            <hr style="margin: 0.5rem 0;">
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>All 50 states + DC included</strong>
-            </p>
-        `;
+        if (!this.showOverlay) {
+            legendContent += `
+                <hr style="margin: 0.5rem 0;">
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>All 50 states + DC included</strong>
+                </p>
+            `;
+        }
         
         this.legendDiv.innerHTML = legendContent;
     }
@@ -440,7 +489,7 @@ class HealthEquityMap {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
-        const valueDescription = state.avgValue >= quartiles.q3 ? 'High' : state.avgValue >= quartiles.q2 ? 'Medium-High' : state.avgValue >= quartiles.q1 ? 'Medium-Low' : 'Low';
+        const valueClassification = this.getValueClassification(state.avgValue, quartiles);
         
         statsContent.innerHTML = `
             <h4>${state.stateName} - State Statistics</h4>
@@ -449,7 +498,7 @@ class HealthEquityMap {
             <h5>State-Level Data:</h5>
             <div class="state-stats">
                 <div class="stat-item">
-                    <strong>Average Value:</strong> ${state.avgValue.toFixed(1)}% ${valueDescription}
+                    <strong>Average Value:</strong> ${state.avgValue.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>
                 </div>
                 <div class="stat-item">
                     <strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}
@@ -480,18 +529,18 @@ class HealthEquityMap {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
-        const valueDescription = location.Data_Value >= quartiles.q3 ? 'High' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low';
+        const valueClassification = this.getValueClassification(location.Data_Value, quartiles);
         
         if (this.showOverlay) {
             // Overlay mode: show both datasets
             const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+            const sdohClassification = matchingSDOH ? this.getValueClassification(matchingSDOH.Data_Value, quartiles) : 'Unknown';
             
             statsContent.innerHTML = `
                 <h4>${location.LocationName} - County Statistics (Overlay)</h4>
                 <p><strong>Health Measure:</strong> ${this.currentHealthMeasure.length > 60 ? this.currentHealthMeasure.substring(0, 60) + '...' : this.currentHealthMeasure}</p>
                 <p><strong>SDOH Measure:</strong> ${this.currentSDOHMeasure.length > 60 ? this.currentSDOHMeasure.substring(0, 60) + '...' : this.currentSDOHMeasure}</p>
-                
-                <h5>Health Data (${this.currentHealthMeasure}):</h5>
+            
                 <div class="state-stats">
                     <div class="stat-item">
                         <strong>Value:</strong> ${(() => {
@@ -500,7 +549,7 @@ class HealthEquityMap {
                                 const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
                                 valueDisplay += ` ± ${margin}%`;
                             }
-                            return valueDisplay + ` ${valueDescription}`;
+                            return valueDisplay + ` <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>`;
                         })()}
                     </div>
                     <div class="stat-item">
@@ -515,7 +564,7 @@ class HealthEquityMap {
                     <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
                     <div class="state-stats" style="background: #f0f8ff; border-left: 4px solid #8B0080;">
                         <div class="stat-item">
-                            <strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'}
+                            <strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span>
                         </div>
                         <div class="stat-item">
                             <strong>Population:</strong> ${(matchingSDOH.TotalPopulation || 0).toLocaleString()}
@@ -560,7 +609,7 @@ class HealthEquityMap {
                                 const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
                                 valueDisplay += ` ± ${margin}%`;
                             }
-                            return valueDisplay + ` ${valueDescription}`;
+                            return valueDisplay + ` <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>`;
                         })()}
                     </div>
                     <div class="stat-item">
@@ -827,9 +876,12 @@ class HealthEquityMap {
             
             console.log('Loaded health data for overlay:', this.overlayHealthData.length, 'records');
             console.log('Loaded SDOH data for overlay:', this.overlaySDOHData.length, 'records');
+            console.log('Sample health data:', this.overlayHealthData.slice(0, 2));
+            console.log('Sample SDOH data:', this.overlaySDOHData.slice(0, 2));
             
             // Create combined dataset for rendering (use health data as primary)
             this.currentData = this.overlayHealthData;
+            this.currentMeasure = this.currentHealthMeasure; // Set current measure for rendering
             
             if (this.currentData.length === 0) {
                 this.showError('No data available for the selected measures in overlay mode.');
@@ -1057,7 +1109,7 @@ class HealthEquityMap {
     
     createStateMarker(state, quartiles, measureName) {
         const value = state.avgValue;
-        const color = this.getDataColor(value, quartiles, measureName);
+        const color = this.getDataColor(value, quartiles, measureName, state);
         const radius = this.getStateMarkerRadius(state.totalPopulation);
         
         const marker = L.circleMarker([state.lat, state.lng], {
@@ -1070,12 +1122,12 @@ class HealthEquityMap {
         });
         
         // Create popup content for state
-        const valueDescription = value >= quartiles.q3 ? 'High' : value >= quartiles.q2 ? 'Medium-High' : value >= quartiles.q1 ? 'Medium-Low' : 'Low';
+        const valueClassification = this.getValueClassification(value, quartiles);
         
         const popupContent = `
             <div style="min-width: 200px;">
                 <h4>${state.stateName}</h4>
-                <p><strong>Average Value:</strong> ${value.toFixed(1)}% ${valueDescription}</p>
+                <p><strong>Average Value:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
                 <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
                 <p><strong>Locations:</strong> ${state.locationCount}</p>
                 <p><strong>Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
@@ -1117,18 +1169,51 @@ class HealthEquityMap {
     
     createMarker(location, quartiles, measureName = null) {
         const value = location.Data_Value;
-        const color = this.getDataColor(value, quartiles, measureName);
-        const radius = this.getMarkerRadius(location.TotalPopulation || 1000);
         
-        const marker = L.circleMarker([location.lat, location.lng], {
-            radius: radius,
-            fillColor: color,
-            color: 'white',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8,
-            className: 'health-marker'
-        });
+        let marker;
+        
+        if (this.showOverlay) {
+            // Overlay mode: use population-based radius for size, split colors for data values
+            const radius = this.getMarkerRadius(location.TotalPopulation || 15);
+            
+            const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+            
+            if (matchingSDOH && matchingSDOH.Data_Value !== null && matchingSDOH.Data_Value !== undefined) {
+                // Calculate quartiles for both datasets
+                const healthValues = this.overlayHealthData.map(d => d.Data_Value).filter(v => !isNaN(v));
+                const sdohValues = this.overlaySDOHData.map(d => d.Data_Value).filter(v => !isNaN(v));
+                
+                const healthQuartiles = this.calculateQuartiles(healthValues);
+                const sdohQuartiles = this.calculateQuartiles(sdohValues);
+                
+                marker = this.createSplitMarker(location, healthQuartiles, sdohQuartiles, value, matchingSDOH.Data_Value, radius);
+            } else {
+                // Fallback to regular marker if no SDOH data
+                const color = this.getDataColor(value, quartiles, measureName, location);
+                marker = L.circleMarker([location.lat, location.lng], {
+                    radius: radius,
+                    fillColor: color,
+                    color: 'white',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8,
+                    className: 'health-marker'
+                });
+            }
+        } else {
+            // Regular mode: use population-based radius
+            const radius = this.getMarkerRadius(location.TotalPopulation || 15);
+            const color = this.getDataColor(value, quartiles, measureName, location);
+            marker = L.circleMarker([location.lat, location.lng], {
+                radius: radius,
+                fillColor: color,
+                color: 'white',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8,
+                className: 'health-marker'
+            });
+        }
         
         // Create popup content
         let valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
@@ -1140,22 +1225,28 @@ class HealthEquityMap {
         }
         
         let popupContent;
+        const valueClassification = this.getValueClassification(location.Data_Value, quartiles);
         
         if (this.showOverlay) {
             // Overlay mode: show both health and SDOH data
             const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+            const sdohClassification = matchingSDOH ? this.getValueClassification(matchingSDOH.Data_Value, quartiles) : 'Unknown';
             
             popupContent = `
                 <div class="popup-content">
                     <h4>${location.LocationName || 'Unknown Location'}</h4>
                     <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
                     <hr style="margin: 0.5rem 0;">
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <div style="width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(to right, ${this.calculateHealthColor(value, quartiles)} 50%, ${matchingSDOH ? this.calculateSDOHColor(matchingSDOH.Data_Value, quartiles) : '#ccc'} 50%); border: 2px solid white; margin-right: 10px;"></div>
+                        <span style="font-size: 0.9rem; color: #666;">Split marker: Health (left) | SDOH (right)</span>
+                    </div>
                     <h5>Health Data (${this.currentHealthMeasure}):</h5>
-                    <p><strong>Value:</strong> ${valueDisplay}</p>
+                    <p><strong>Value:</strong> ${valueDisplay} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
                     ${matchingSDOH ? `
                         <hr style="margin: 0.5rem 0;">
                         <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
-                        <p><strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'}</p>
+                        <p><strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
                     ` : `
                         <p style="color: #666; font-style: italic;">No matching SDOH data available</p>
                     `}
@@ -1169,7 +1260,7 @@ class HealthEquityMap {
                 <div class="popup-content">
                     <h4>${location.LocationName || 'Unknown Location'}</h4>
                     <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
-                    <p><strong>Value:</strong> ${valueDisplay}</p>
+                    <p><strong>Value:</strong> ${valueDisplay} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
                     <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
                 </div>
             `;
@@ -1209,9 +1300,149 @@ class HealthEquityMap {
     }
     
 
-    getDataColor(value, quartiles, measureName = null) {
-        if (value === null || value === undefined || isNaN(value)) return '#95a5a6';
+    getValueClassification(value, quartiles) {
+        if (value === null || value === undefined || isNaN(value)) return 'Unknown';
         
+        if (value >= quartiles.q3) return 'High';
+        if (value >= quartiles.q2) return 'Medium-High';
+        if (value >= quartiles.q1) return 'Medium-Low';
+        return 'Low';
+    }
+
+    getClassificationColor(classification) {
+        switch(classification) {
+            case 'High': return '#dc3545'; // Red
+            case 'Medium-High': return '#fd7e14'; // Orange
+            case 'Medium-Low': return '#ffc107'; // Yellow
+            case 'Low': return '#28a745'; // Green
+            default: return '#6c757d'; // Gray
+        }
+    }
+
+    createSplitMarker(location, healthQuartiles, sdohQuartiles, healthValue, sdohValue, radius) {
+        // Calculate colors for each half
+        const healthColor = this.calculateHealthColor(healthValue, healthQuartiles);
+        const sdohColor = this.calculateSDOHColor(sdohValue, sdohQuartiles);
+        
+        // Create HTML for split circle using CSS
+        const html = `
+            <div style="
+                width: ${radius * 2}px; 
+                height: ${radius * 2}px; 
+                border-radius: 50%; 
+                position: relative;
+                border: 2px solid white;
+                overflow: hidden;
+            ">
+                <div style="
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 50%;
+                    height: 100%;
+                    background-color: ${healthColor};
+                "></div>
+                <div style="
+                    position: absolute;
+                    right: 0;
+                    top: 0;
+                    width: 50%;
+                    height: 100%;
+                    background-color: ${sdohColor};
+                "></div>
+            </div>
+        `;
+        
+        // Create custom icon
+        const icon = L.divIcon({
+            html: html,
+            className: 'split-marker',
+            iconSize: [radius * 2, radius * 2],
+            iconAnchor: [radius, radius]
+        });
+        
+        return L.marker([location.lat, location.lng], { icon: icon });
+    }
+
+    getDataColor(value, quartiles, measureName = null, location = null) {
+        if (value === null || value === undefined || isNaN(value)) return '#95a5a6';
+
+        const q1 = quartiles.q1;
+        const q3 = quartiles.q3;
+        const iqr = q3 - q1;
+
+        // Calculate outlier bounds using 1.5 IQR rule
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+
+        // Clamp value to outlier bounds
+        const clampedValue = Math.max(lowerBound, Math.min(upperBound, value));
+
+        // Normalize clamped value to 0-1 range within the outlier bounds
+        const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
+
+        // Use different color schemes based on data type
+        if (this.showOverlay) {
+            // Overlay mode: blend health and SDOH colors
+            return this.getOverlayBlendedColor(value, quartiles, location);
+        } else if (this.showSDOH) {
+            // SDOH data: white (low) to blue (high)
+            return this.getGradientColor(normalized, '#ffffff', '#0066cc');
+        } else {
+            // Health data: white (low) to dark red (high)
+            return this.getGradientColor(normalized, '#ffffff', '#8B0000');
+        }
+    }
+    
+    getOverlayBlendedColor(value, quartiles, location = null) {
+        try {
+            // For overlay mode, we need to find the matching SDOH data for this location
+            // and calculate colors for both health and SDOH values, then blend them
+            
+            if (!location) {
+                console.warn('No location provided for overlay color calculation');
+                return '#95a5a6';
+            }
+            
+            // Check if overlay data is available
+            if (!this.overlayHealthData || !this.overlaySDOHData) {
+                console.warn('Overlay data not available for color calculation');
+                return '#95a5a6';
+            }
+            
+            // Find matching SDOH data for this location
+            const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+            
+            if (!matchingSDOH) {
+                console.warn('No matching SDOH data found for location:', location.LocationName);
+                return '#95a5a6';
+            }
+            
+            // Calculate quartiles for both datasets
+            const healthValues = this.overlayHealthData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            const sdohValues = this.overlaySDOHData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            
+            if (healthValues.length === 0 || sdohValues.length === 0) {
+                console.warn('No valid values found in overlay data');
+                return '#95a5a6';
+            }
+            
+            const healthQuartiles = this.calculateQuartiles(healthValues);
+            const sdohQuartiles = this.calculateQuartiles(sdohValues);
+            
+            // Calculate individual colors using the same logic as individual modes
+            const healthColor = this.calculateHealthColor(value, healthQuartiles);
+            const sdohColor = this.calculateSDOHColor(matchingSDOH.Data_Value, sdohQuartiles);
+            
+            // Blend the colors (average RGB values)
+            return this.blendColors(healthColor, sdohColor);
+        } catch (error) {
+            console.error('Error in getOverlayBlendedColor:', error);
+            return '#95a5a6';
+        }
+    }
+    
+    calculateHealthColor(value, quartiles) {
         const q1 = quartiles.q1;
         const q3 = quartiles.q3;
         const iqr = q3 - q1;
@@ -1226,17 +1457,57 @@ class HealthEquityMap {
         // Normalize clamped value to 0-1 range within the outlier bounds
         const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
         
-        // Use different color schemes based on data type
-        if (this.showOverlay) {
-            // Overlay mode: white (low) to purple (high) to distinguish from individual modes
-            return this.getGradientColor(normalized, '#ffffff', '#8B0080');
-        } else if (this.showSDOH) {
-            // SDOH data: white (low) to blue (high)
-            return this.getGradientColor(normalized, '#ffffff', '#0066cc');
-        } else {
-            // Health data: white (low) to dark red (high)
-            return this.getGradientColor(normalized, '#ffffff', '#8B0000');
-        }
+        // Health data: white (low) to dark red (high)
+        return this.getGradientColor(normalized, '#ffffff', '#8B0000');
+    }
+    
+    calculateSDOHColor(value, quartiles) {
+        const q1 = quartiles.q1;
+        const q3 = quartiles.q3;
+        const iqr = q3 - q1;
+        
+        // Calculate outlier bounds using 1.5 IQR rule
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+        
+        // Clamp value to outlier bounds
+        const clampedValue = Math.max(lowerBound, Math.min(upperBound, value));
+        
+        // Normalize clamped value to 0-1 range within the outlier bounds
+        const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
+        
+        // SDOH data: white (low) to blue (high)
+        return this.getGradientColor(normalized, '#ffffff', '#0066cc');
+    }
+    
+    
+    normalizeValue(value, quartiles) {
+        const q1 = quartiles.q1;
+        const q3 = quartiles.q3;
+        const iqr = q3 - q1;
+        
+        // Calculate outlier bounds using 1.5 IQR rule
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+        
+        // Clamp value to outlier bounds
+        const clampedValue = Math.max(lowerBound, Math.min(upperBound, value));
+        
+        // Normalize clamped value to 0-1 range within the outlier bounds
+        return (clampedValue - lowerBound) / (upperBound - lowerBound);
+    }
+    
+    blendColors(color1, color2) {
+        // Parse both colors
+        const rgb1 = this.hexToRgb(color1);
+        const rgb2 = this.hexToRgb(color2);
+        
+        // Average the RGB values
+        const r = Math.round((rgb1.r + rgb2.r) / 2);
+        const g = Math.round((rgb1.g + rgb2.g) / 2);
+        const b = Math.round((rgb1.b + rgb2.b) / 2);
+        
+        return `rgb(${r}, ${g}, ${b})`;
     }
     
     getGradientColor(normalized, startColor, endColor) {
