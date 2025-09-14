@@ -8,7 +8,7 @@ class HealthEquityMap {
         this.availableMeasures = [];
         this.minZoomForMarkers = 7; // Minimum zoom level to show markers
         this.markersVisible = false;
-        this.isStateView = false; // Toggle between state and city view
+        this.isStateView = false; // Toggle between state and county view
         
         this.init();
     }
@@ -77,7 +77,7 @@ class HealthEquityMap {
         const highColor = isPositive ? '#3498db' : '#e74c3c';
         const lowDescription = isPositive ? 'Low (Bad)' : 'Low (Good)';
         const highDescription = isPositive ? 'High (Good)' : 'High (Bad)';
-        const viewType = this.isStateView ? 'State-level aggregation' : 'City-level data';
+        const viewType = this.isStateView ? 'State-level aggregation' : 'County-level data';
         
         this.legendDiv.innerHTML = `
             <h4>Data Value Legend</h4>
@@ -93,9 +93,6 @@ class HealthEquityMap {
                 <span>${highDescription}</span>
             </div>
             <hr style="margin: 0.5rem 0;">
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>${measureType} Measure:</strong> Gradient from ${lowDescription} to ${highDescription}
-            </p>
             <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
                 <strong>View:</strong> ${viewType}
             </p>
@@ -225,21 +222,6 @@ class HealthEquityMap {
                 </div>
             </div>
             
-            <h5>Value Distribution:</h5>
-            <div class="value-distribution">
-                <div class="gradient-bar" style="
-                    height: 20px; 
-                    background: linear-gradient(to right, ${isPositive ? '#e74c3c' : '#3498db'}, ${isPositive ? '#3498db' : '#e74c3c'}); 
-                    border-radius: 4px; 
-                    margin: 0.5rem 0;
-                    border: 1px solid #ddd;
-                "></div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
-                    <span>${isPositive ? 'Low (Bad)' : 'Low (Good)'}</span>
-                    <span>${isPositive ? 'High (Good)' : 'High (Bad)'}</span>
-                </div>
-            </div>
-            
             <h5>State Context:</h5>
             <div class="state-context">
                 <p><strong>Data Type:</strong> Population-weighted average across ${state.locationCount} locations</p>
@@ -254,7 +236,7 @@ class HealthEquityMap {
         `;
     }
     
-    updateCityStatsPanel(location, measureName, quartiles) {
+    updateCountyStatsPanel(location, measureName, quartiles) {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
@@ -264,10 +246,10 @@ class HealthEquityMap {
             (location.Data_Value >= quartiles.q3 ? 'High (Bad)' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low (Good)');
         
         statsContent.innerHTML = `
-            <h4>${location.LocationName} - City Statistics</h4>
+            <h4>${location.LocationName} - County Statistics</h4>
             <p><strong>Selected Measure:</strong> ${measureName.length > 60 ? measureName.substring(0, 60) + '...' : measureName}</p>
             
-            <h5>City-Level Data:</h5>
+            <h5>County-Level Data:</h5>
             <div class="state-stats">
                 <div class="stat-item">
                     <strong>Value:</strong> ${location.Data_Value.toFixed(1)}% ${valueDescription}
@@ -286,31 +268,16 @@ class HealthEquityMap {
                 }
             </div>
             
-            <h5>Value Distribution:</h5>
-            <div class="value-distribution">
-                <div class="gradient-bar" style="
-                    height: 20px; 
-                    background: linear-gradient(to right, ${isPositive ? '#e74c3c' : '#3498db'}, ${isPositive ? '#3498db' : '#e74c3c'}); 
-                    border-radius: 4px; 
-                    margin: 0.5rem 0;
-                    border: 1px solid #ddd;
-                "></div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
-                    <span>${isPositive ? 'Low (Bad)' : 'Low (Good)'}</span>
-                    <span>${isPositive ? 'High (Good)' : 'High (Bad)'}</span>
-                </div>
-            </div>
-            
             <h5>Location Context:</h5>
             <div class="state-context">
                 <p><strong>Data Type:</strong> Direct measurement from ${location.Data_Value_Type || 'survey data'}</p>
                 <p><strong>Reliability:</strong> ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 'High (confidence interval available)' : 'Standard'}</p>
-                <p><strong>Population Size:</strong> ${(location.TotalPopulation || 0) >= 100000 ? 'Large' : (location.TotalPopulation || 0) >= 10000 ? 'Medium' : 'Small'} city/county</p>
+                <p><strong>Population Size:</strong> ${(location.TotalPopulation || 0) >= 100000 ? 'Large' : (location.TotalPopulation || 0) >= 10000 ? 'Medium' : 'Small'} county</p>
             </div>
             
             <hr style="margin: 1rem 0;">
             <p style="font-size: 0.8rem; color: #666; margin: 0;">
-                <em>Click on other city markers to view their statistics</em>
+                <em>Click on other county markers to view their statistics</em>
             </p>
         `;
     }
@@ -322,7 +289,7 @@ class HealthEquityMap {
         statsContent.innerHTML = `
             <h4>Health Equity Heatmap</h4>
             <p><strong>Data Coverage:</strong> 28 health measures across all 50 states + DC</p>
-            <p><strong>Total Locations:</strong> 28,335 cities and counties</p>
+            <p><strong>Total Locations:</strong> 3,142 counties</p>
             <p><strong>Population Coverage:</strong> 330+ million Americans</p>
             
             <h5>Available Measures:</h5>
@@ -355,7 +322,7 @@ class HealthEquityMap {
             
             <hr style="margin: 1rem 0;">
             <p style="font-size: 0.9rem; color: #666; margin: 0;">
-                <strong>Instructions:</strong> Select a health measure from the dropdown above to view data on the map. Use the toggle switch to switch between city-level and state-level views.
+                <strong>Instructions:</strong> Select a health measure from the dropdown above to view data on the map. Use the toggle switch to switch between county-level and state-level views.
             </p>
         `;
     }
@@ -397,7 +364,7 @@ class HealthEquityMap {
                 console.log('Rendering markers...');
                 this.renderMap();
             } else {
-                console.log('Zoom level too low for city markers, not rendering');
+                console.log('Zoom level too low for county markers, not rendering');
                 this.markersVisible = false;
             }
             
@@ -417,7 +384,7 @@ class HealthEquityMap {
     handleZoomChange() {
         const currentZoom = this.map.getZoom();
         
-        // State view is always visible, city view respects zoom level
+        // State view is always visible, county view respects zoom level
         const shouldShowMarkers = this.isStateView || currentZoom >= this.minZoomForMarkers;
         
         if (shouldShowMarkers && !this.markersVisible && this.currentData.length > 0) {
@@ -455,16 +422,16 @@ class HealthEquityMap {
             this.renderStateAggregation();
             this.markersVisible = true;
         } else {
-            // City view - check zoom level
+            // County view - check zoom level
             const currentZoom = this.map.getZoom();
             if (currentZoom < this.minZoomForMarkers) {
-                console.log('Zoom level too low for city markers');
+                console.log('Zoom level too low for county markers');
                 this.markersVisible = false;
                 this.showZoomMessage();
                 return;
             }
-            console.log('Rendering city markers');
-            this.renderCityMarkers();
+            console.log('Rendering county markers');
+            this.renderCountyMarkers();
             this.markersVisible = true;
             this.hideZoomMessage();
         }
@@ -507,8 +474,8 @@ class HealthEquityMap {
         console.log('Created', markersCreated, 'state markers');
     }
     
-    renderCityMarkers() {
-        console.log('Rendering city-level markers');
+    renderCountyMarkers() {
+        console.log('Rendering county-level markers');
         
         // Calculate quartiles for color coding
         const values = this.currentData.map(d => d.Data_Value).filter(v => !isNaN(v));
@@ -530,7 +497,7 @@ class HealthEquityMap {
             }
         });
         
-        console.log('Created', markersCreated, 'city markers');
+        console.log('Created', markersCreated, 'county markers');
     }
     
     calculateQuartiles(values) {
@@ -705,7 +672,7 @@ class HealthEquityMap {
         marker.bindPopup(popupContent);
         
         // Add click handler
-        marker.on('click', () => this.updateCityStatsPanel(location, measureName, quartiles));
+        marker.on('click', () => this.updateCountyStatsPanel(location, measureName, quartiles));
         
         return marker.addTo(this.map);
     }
@@ -997,7 +964,7 @@ class HealthEquityMap {
     }
     
     showZoomMessage() {
-        // Only show zoom message for city view
+        // Only show zoom message for county view
         if (this.isStateView) {
             return;
         }
@@ -1022,7 +989,7 @@ class HealthEquityMap {
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 pointer-events: none;
             `;
-            zoomBar.textContent = 'Zoom in to see city data points';
+            zoomBar.textContent = 'Zoom in to see county data points';
             
             // Add it to the map container
             const mapContainer = document.getElementById('map');

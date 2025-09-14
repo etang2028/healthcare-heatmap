@@ -289,6 +289,204 @@ def preprocess_sdoh_data():
         print(f"Error processing SDOH data: {e}")
         return 0
 
+def preprocess_county_data():
+    """Preprocess county data into smaller, cleaned files"""
+    print("Loading county data...")
+    
+    # Load the county dataset
+    df = pd.read_csv('data/PLACES__County_Data_(GIS_Friendly_Format),_2020_release_20250914.csv')
+    
+    print(f"Original county data shape: {df.shape}")
+    print(f"Total counties: {len(df)}")
+    print(f"Total states: {df['StateDesc'].nunique()}")
+    
+    # Clean the data
+    print("\nCleaning county data...")
+    initial_count = len(df)
+    
+    # Convert TotalPopulation to numeric, handling comma-separated values
+    df['TotalPopulation'] = df['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+    
+    # Extract coordinates from Geolocation column
+    print("Extracting coordinates...")
+    coord_pattern = r'POINT \(([^ ]+) ([^)]+)\)'
+    coord_matches = df['Geolocation'].str.extract(coord_pattern)
+    df['lat'] = coord_matches[1]
+    df['lng'] = coord_matches[0]
+    
+    # Convert to numeric
+    df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+    df['lng'] = pd.to_numeric(df['lng'], errors='coerce')
+    
+    # Only keep rows with valid coordinates
+    valid_coords = df.dropna(subset=['lat', 'lng'])
+    print(f"After coordinate extraction: {len(valid_coords)} (removed {len(df) - len(valid_coords)})")
+    
+    # Check coordinate validity (should be within US bounds roughly)
+    valid_coords = valid_coords[
+        (valid_coords['lat'] >= 24) & (valid_coords['lat'] <= 72) &  # Latitude bounds for US
+        (valid_coords['lng'] >= -180) & (valid_coords['lng'] <= -65)  # Longitude bounds for US
+    ]
+    print(f"After coordinate validation: {len(valid_coords)} (removed {len(df) - len(valid_coords)})")
+    
+    df = valid_coords
+    
+    print(f"Final cleaned county data shape: {df.shape}")
+    
+    # Create county summary
+    print("\nCreating county summary...")
+    counties = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS']].copy()
+    counties['measure_count'] = 28  # All counties have all 28 measures
+    counties['location_type'] = 'County'
+    
+    # Save county summary
+    counties.to_csv('data/county_locations_summary.csv', index=False)
+    print(f"Saved {len(counties)} counties to county_locations_summary.csv")
+    
+    # Show county counts by state
+    print("\nCounty counts by state:")
+    state_counts = counties['StateDesc'].value_counts()
+    for state, count in state_counts.head(10).items():
+        print(f"  {state}: {count} counties")
+    
+    # Create measure mapping from county columns to measure names
+    measure_mapping = {
+        'ACCESS2_CrudePrev': 'Current lack of health insurance among adults aged 18-64 years',
+        'ARTHRITIS_CrudePrev': 'Arthritis among adults aged >=18 years',
+        'BINGE_CrudePrev': 'Binge drinking among adults aged >=18 years',
+        'BPHIGH_CrudePrev': 'High blood pressure among adults aged >=18 years',
+        'BPMED_CrudePrev': 'Taking medicine for high blood pressure control among adults aged >=18 years with high blood pressure',
+        'CANCER_CrudePrev': 'Cancer (excluding skin cancer) among adults aged >=18 years',
+        'CASTHMA_CrudePrev': 'Current asthma among adults aged >=18 years',
+        'CERVICAL_CrudePrev': 'Cervical cancer screening among adult women aged 21-65 years',
+        'CHD_CrudePrev': 'Coronary heart disease among adults aged >=18 years',
+        'CHECKUP_CrudePrev': 'Visits to doctor for routine checkup within the past year among adults aged >=18 years',
+        'CHOLSCREEN_CrudePrev': 'Cholesterol screening among adults aged >=18 years',
+        'COLON_SCREEN_CrudePrev': 'Fecal occult blood test, sigmoidoscopy, or colonoscopy among adults aged 50-75 years',
+        'COPD_CrudePrev': 'Chronic obstructive pulmonary disease among adults aged >=18 years',
+        'COREM_CrudePrev': 'Older adult men aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening',
+        'COREW_CrudePrev': 'Older adult women aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening, and Mammogram past 2 years',
+        'CSMOKING_CrudePrev': 'Current smoking among adults aged >=18 years',
+        'DENTAL_CrudePrev': 'Visits to dentist or dental clinic among adults aged >=18 years',
+        'DIABETES_CrudePrev': 'Diagnosed diabetes among adults aged >=18 years',
+        'HIGHCHOL_CrudePrev': 'High cholesterol among adults aged >=18 years who have been screened in the past 5 years',
+        'KIDNEY_CrudePrev': 'Chronic kidney disease among adults aged >=18 years',
+        'LPA_CrudePrev': 'No leisure-time physical activity among adults aged >=18 years',
+        'MAMMOUSE_CrudePrev': 'Mammography use among women aged 50-74 years',
+        'MHLTH_CrudePrev': 'Mental health not good for >=14 days among adults aged >=18 years',
+        'OBESITY_CrudePrev': 'Obesity among adults aged >=18 years',
+        'PHLTH_CrudePrev': 'Physical health not good for >=14 days among adults aged >=18 years',
+        'SLEEP_CrudePrev': 'Sleeping less than 7 hours among adults aged >=18 years',
+        'STROKE_CrudePrev': 'Stroke among adults aged >=18 years',
+        'TEETHLOST_CrudePrev': 'All teeth lost among adults aged >=65 years'
+    }
+    
+    # Create individual county measure files
+    print("\nCreating individual county measure files...")
+    os.makedirs('data/county_measures', exist_ok=True)
+    
+    measure_count = 0
+    for county_col, measure_name in measure_mapping.items():
+        # Get the confidence interval column
+        ci_col = county_col.replace('_CrudePrev', '_Crude95CI')
+        
+        # Create measure data
+        measure_data = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', county_col, ci_col]].copy()
+        measure_data.columns = ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', 'Data_Value', 'Confidence_Interval']
+        
+        # Parse confidence intervals to get low and high limits
+        def parse_confidence_interval(ci_str):
+            if pd.isna(ci_str) or ci_str == '':
+                return np.nan, np.nan
+            try:
+                # Extract numbers from format like "(11.6, 16.3)"
+                numbers = re.findall(r'[\d.]+', str(ci_str))
+                if len(numbers) >= 2:
+                    return float(numbers[0]), float(numbers[1])
+                return np.nan, np.nan
+            except:
+                return np.nan, np.nan
+        
+        ci_parsed = measure_data['Confidence_Interval'].apply(parse_confidence_interval)
+        measure_data['Low_Confidence_Limit'] = [x[0] for x in ci_parsed]
+        measure_data['High_Confidence_Limit'] = [x[1] for x in ci_parsed]
+        
+        # Add other required columns
+        measure_data['Data_Value_Unit'] = '%'
+        measure_data['Data_Value_Type'] = 'Crude Prevalence'
+        measure_data['Measure_Short'] = create_short_measure_name(measure_name)
+        
+        # Drop the raw confidence interval column
+        measure_data = measure_data.drop('Confidence_Interval', axis=1)
+        
+        # Only keep rows with valid data values
+        measure_data = measure_data.dropna(subset=['Data_Value'])
+        
+        # Create safe filename
+        safe_filename = create_safe_filename(measure_name)
+        measure_data.to_csv(f'data/county_measures/{safe_filename}', index=False)
+        measure_count += 1
+        
+        if measure_count % 10 == 0:
+            print(f"  Processed {measure_count} county measures...")
+    
+    print(f"Created {measure_count} individual county measure files")
+    
+    # Create state aggregate files for counties
+    print("\nCreating state aggregate files for counties...")
+    os.makedirs('data/county_state_measures', exist_ok=True)
+    
+    state_measure_count = 0
+    for county_col, measure_name in measure_mapping.items():
+        # Get the confidence interval column
+        ci_col = county_col.replace('_CrudePrev', '_Crude95CI')
+        
+        # Create measure data
+        measure_data = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', county_col, ci_col]].copy()
+        measure_data.columns = ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', 'Data_Value', 'Confidence_Interval']
+        
+        # Parse confidence intervals
+        def parse_confidence_interval(ci_str):
+            if pd.isna(ci_str) or ci_str == '':
+                return np.nan, np.nan
+            try:
+                numbers = re.findall(r'[\d.]+', str(ci_str))
+                if len(numbers) >= 2:
+                    return float(numbers[0]), float(numbers[1])
+                return np.nan, np.nan
+            except:
+                return np.nan, np.nan
+        
+        ci_parsed = measure_data['Confidence_Interval'].apply(parse_confidence_interval)
+        measure_data['Low_Confidence_Limit'] = [x[0] for x in ci_parsed]
+        measure_data['High_Confidence_Limit'] = [x[1] for x in ci_parsed]
+        
+        # Add other required columns
+        measure_data['Data_Value_Unit'] = '%'
+        measure_data['Data_Value_Type'] = 'Crude Prevalence'
+        measure_data['Measure_Short'] = create_short_measure_name(measure_name)
+        
+        # Drop the raw confidence interval column
+        measure_data = measure_data.drop('Confidence_Interval', axis=1)
+        
+        # Only keep rows with valid data values
+        measure_data = measure_data.dropna(subset=['Data_Value'])
+        
+        # Aggregate by state
+        state_aggregated = aggregate_data_by_state(measure_data)
+        
+        # Create safe filename
+        safe_filename = create_safe_filename(measure_name)
+        state_aggregated.to_csv(f'data/county_state_measures/{safe_filename}', index=False)
+        state_measure_count += 1
+        
+        if state_measure_count % 10 == 0:
+            print(f"  Processed {state_measure_count} county state measures...")
+    
+    print(f"Created {state_measure_count} county state aggregate files")
+    
+    return measure_count, len(counties)
+
 def main():
     """Main preprocessing function"""
     print("Starting data preprocessing...")
@@ -297,8 +495,8 @@ def main():
     # Create data directory
     os.makedirs('data', exist_ok=True)
     
-    # Process PLACES data
-    measure_count, location_count = preprocess_places_data()
+    # Process county data
+    county_measure_count, county_count = preprocess_county_data()
     
     # Process SDOH data
     sdoh_count = preprocess_sdoh_data()
@@ -306,14 +504,14 @@ def main():
     print("\n" + "=" * 60)
     print("PREPROCESSING COMPLETE!")
     print("=" * 60)
-    print(f"Locations processed: {location_count}")
-    print(f"Measures processed: {measure_count}")
+    print(f"County locations processed: {county_count}")
+    print(f"County measures processed: {county_measure_count}")
     print(f"SDOH records: {sdoh_count}")
     print("\nFiles created:")
-    print("- data/locations_summary.csv")
+    print("- data/county_locations_summary.csv (county data)")
     print("- data/available_measures.csv")
-    print("- data/measures/*.csv (individual measure files)")
-    print("- data/state_measures/*.csv (state aggregate files)")
+    print("- data/county_measures/*.csv (individual county measure files)")
+    print("- data/county_state_measures/*.csv (county state aggregate files)")
     print("- data/sdoh_cleaned.csv")
     print("\nYou can now use these smaller files for faster loading!")
 

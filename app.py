@@ -12,18 +12,18 @@ locations_data = None
 measures_data = None
 
 def load_locations_data():
-    """Load preprocessed locations data"""
+    """Load preprocessed county locations data"""
     global locations_data
     if locations_data is None:
         try:
-            locations_data = pd.read_csv('data/locations_summary.csv')
+            locations_data = pd.read_csv('data/county_locations_summary.csv')
             # Ensure TotalPopulation is numeric (handle comma-separated values)
             locations_data['TotalPopulation'] = locations_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
-            print(f"Loaded {len(locations_data)} locations from cache")
+            print(f"Loaded {len(locations_data)} county locations from cache")
         except FileNotFoundError:
-            print("Locations summary not found, creating from raw data...")
-            create_locations_summary()
-            locations_data = pd.read_csv('data/locations_summary.csv')
+            print("County locations summary not found, creating from raw data...")
+            create_county_locations_summary()
+            locations_data = pd.read_csv('data/county_locations_summary.csv')
             # Ensure TotalPopulation is numeric (handle comma-separated values)
             locations_data['TotalPopulation'] = locations_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
     return locations_data
@@ -40,6 +40,46 @@ def load_measures_data():
             create_measures_list()
             measures_data = pd.read_csv('data/available_measures.csv')
     return measures_data
+
+def create_county_locations_summary():
+    """Create county locations summary from raw data (one-time setup)"""
+    print("Creating county locations summary from raw data...")
+    
+    # Load the county dataset
+    df = pd.read_csv('data/PLACES__County_Data_(GIS_Friendly_Format),_2020_release_20250914.csv')
+    
+    # Convert TotalPopulation to numeric, handling comma-separated values
+    df['TotalPopulation'] = df['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+    
+    # Extract coordinates from Geolocation column
+    coord_pattern = r'POINT \(([^ ]+) ([^)]+)\)'
+    coord_matches = df['Geolocation'].str.extract(coord_pattern)
+    df['lat'] = coord_matches[1]
+    df['lng'] = coord_matches[0]
+    
+    # Convert to numeric
+    df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+    df['lng'] = pd.to_numeric(df['lng'], errors='coerce')
+    
+    # Only keep rows with valid coordinates
+    valid_coords = df.dropna(subset=['lat', 'lng'])
+    
+    # Check coordinate validity (should be within US bounds roughly)
+    valid_coords = valid_coords[
+        (valid_coords['lat'] >= 24) & (valid_coords['lat'] <= 72) &  # Latitude bounds for US
+        (valid_coords['lng'] >= -180) & (valid_coords['lng'] <= -65)  # Longitude bounds for US
+    ]
+    
+    df = valid_coords
+    
+    # Create county summary
+    counties = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS']].copy()
+    counties['measure_count'] = 28  # All counties have all 28 measures
+    counties['location_type'] = 'County'
+    
+    # Save county summary
+    counties.to_csv('data/county_locations_summary.csv', index=False)
+    print(f"Saved {len(counties)} counties to county_locations_summary.csv")
 
 def create_locations_summary():
     """Create locations summary from raw data (one-time setup)"""
@@ -151,26 +191,26 @@ def get_measures():
 def get_state_measure_data(measure_name):
     """API endpoint to get state aggregate data for a specific measure"""
     try:
-        # Check if we have a preprocessed state file for this measure
+        # Check if we have a preprocessed county state file for this measure
         safe_filename = create_safe_filename(measure_name)
-        state_measure_file = f'data/state_measures/{safe_filename}'
+        county_state_measure_file = f'data/county_state_measures/{safe_filename}'
         
-        if os.path.exists(state_measure_file):
-            # Load from preprocessed state file
-            state_data = pd.read_csv(state_measure_file)
+        if os.path.exists(county_state_measure_file):
+            # Load from preprocessed county state file
+            state_data = pd.read_csv(county_state_measure_file)
             # Ensure TotalPopulation is numeric (handle comma-separated values)
             state_data['TotalPopulation'] = state_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
-            print(f"Loaded {len(state_data)} state records from preprocessed file: {state_measure_file}")
+            print(f"Loaded {len(state_data)} state records from preprocessed county file: {county_state_measure_file}")
         else:
-            # Fallback: aggregate from city data
-            print(f"State file not found, aggregating from city data for measure: {measure_name}")
+            # Fallback: aggregate from county data
+            print(f"State file not found, aggregating from county data for measure: {measure_name}")
             measure_data = get_measure_data(measure_name)
             if len(measure_data) == 0:
                 return jsonify([])
             
             # Aggregate by state
             state_data = aggregate_data_by_state(measure_data)
-            print(f"Aggregated {len(state_data)} state records from city data")
+            print(f"Aggregated {len(state_data)} state records from county data")
         
         # Convert to list of dictionaries for JSON response
         state_data_list = state_data.to_dict('records')
@@ -190,35 +230,17 @@ def get_measure_data(measure_name):
         safe_filename = create_safe_filename(measure_name)
         measure_file = f'data/measures/{safe_filename}'
         
-        if os.path.exists(measure_file):
-            # Load from preprocessed file
-            measure_data = pd.read_csv(measure_file)
+        # Use county data
+        county_measure_file = f'data/county_measures/{safe_filename}'
+        
+        if os.path.exists(county_measure_file):
+            # Load from preprocessed county file
+            measure_data = pd.read_csv(county_measure_file)
             # Ensure TotalPopulation is numeric (handle comma-separated values)
             measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
-            print(f"Loaded {len(measure_data)} records from preprocessed file: {measure_file}")
+            print(f"Loaded {len(measure_data)} county records from preprocessed file: {county_measure_file}")
         else:
-            # Load from raw data and filter for specific measure
-            print(f"Loading from raw data for measure: {measure_name}")
-            df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv')
-            
-            # Filter for the specific measure
-            measure_data = df[df['Measure'] == measure_name].copy()
-            
-            if measure_data.empty:
-                return jsonify({"error": "Measure not found"}), 404
-            
-            # Clean data
-            measure_data = measure_data.dropna(subset=['Data_Value', 'Geolocation'])
-            measure_data['Data_Value'] = pd.to_numeric(measure_data['Data_Value'], errors='coerce')
-            measure_data = measure_data.dropna(subset=['Data_Value'])
-            
-            # Convert TotalPopulation to numeric, handling comma-separated values
-            measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
-            
-            # Extract coordinates
-            measure_data['lat'] = measure_data['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[1].astype(float)
-            measure_data['lng'] = measure_data['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[0].astype(float)
-            measure_data = measure_data.dropna(subset=['lat', 'lng'])
+            return jsonify({"error": "Measure not found"}), 404
         
         # Prepare result
         result = measure_data[[
