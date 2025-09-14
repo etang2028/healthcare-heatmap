@@ -392,19 +392,6 @@ class HealthEquityMap {
                 }
             }
         });
-        
-        // Refresh data button
-        document.getElementById('refresh-data').addEventListener('click', () => {
-            if (this.currentMeasure) {
-                if (this.showOverlay) {
-                    this.loadOverlayData();
-                } else if (this.showSDOH) {
-                    this.loadSDOHMeasureData();
-                } else {
-                    this.loadMeasureData();
-                }
-            }
-        });
     }
     
     updateToggleText() {
