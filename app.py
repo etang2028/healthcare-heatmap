@@ -407,7 +407,7 @@ def get_sdoh_measure_data(measure_name):
         locations_data['CountyFIPS'] = locations_data['CountyFIPS'].astype(str).str.zfill(5)
         
         merged_data = sdoh_data.merge(
-            locations_data[['CountyFIPS', 'lat', 'lng', 'TotalPopulation']], 
+            locations_data[['CountyFIPS', 'lat', 'lng', 'TotalPopulation', 'CountyName', 'StateDesc']], 
             on='CountyFIPS', 
             how='left'
         )
@@ -418,8 +418,8 @@ def get_sdoh_measure_data(measure_name):
             if pd.notna(row[column_name]) and pd.notna(row['CountyFIPS']):
                 data_list.append({
                     'CountyFIPS': str(row['CountyFIPS']).zfill(5),
-                    'CountyName': 'Unknown County',  # SDOH data doesn't have county names
-                    'StateDesc': 'Unknown State',    # SDOH data doesn't have state names
+                    'LocationName': row['CountyName'] if pd.notna(row['CountyName']) else 'Unknown County',
+                    'StateDesc': row['StateDesc'] if pd.notna(row['StateDesc']) else 'Unknown State',
                     'lat': float(row['lat']) if pd.notna(row['lat']) else 0,
                     'lng': float(row['lng']) if pd.notna(row['lng']) else 0,
                     'TotalPopulation': float(row['TotalPopulation']) if pd.notna(row['TotalPopulation']) else 0,

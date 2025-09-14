@@ -5,8 +5,13 @@ class HealthEquityMap {
         this.currentData = [];
         this.markers = [];
         this.showSDOH = false;
+        this.showOverlay = false;
         this.availableMeasures = [];
         this.availableSDOHMeasures = [];
+        this.overlayHealthData = [];
+        this.overlaySDOHData = [];
+        this.currentHealthMeasure = null;
+        this.currentSDOHMeasure = null;
         this.minZoomForMarkers = 4; // Minimum zoom level to show markers
         this.markersVisible = false;
         this.isStateView = false; // Toggle between state and county view
@@ -75,13 +80,24 @@ class HealthEquityMap {
         
         const measureType = 'Measure';
         const lowColor = '#ffffff';
-        const highColor = this.showSDOH ? '#0066cc' : '#8B0000';
+        let highColor, dataType;
+        
+        if (this.showOverlay) {
+            highColor = '#8B0080';
+            dataType = 'Overlay Data';
+        } else if (this.showSDOH) {
+            highColor = '#0066cc';
+            dataType = 'SDOH Data';
+        } else {
+            highColor = '#8B0000';
+            dataType = 'Health Data';
+        }
+        
         const lowDescription = 'Low';
         const highDescription = 'High';
         const viewType = this.isStateView ? 'State-level aggregation' : 'County-level data';
-        const dataType = this.showSDOH ? 'SDOH Data' : 'Health Data';
         
-        this.legendDiv.innerHTML = `
+        let legendContent = `
             <h4>Data Value Legend</h4>
             <div class="legend-gradient" style="
                 height: 20px; 
@@ -94,18 +110,35 @@ class HealthEquityMap {
                 <span>${lowDescription}</span>
                 <span>${highDescription}</span>
             </div>
+            <hr style="margin: 0.5rem 0;">
+            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                <strong>Data Type:</strong> ${dataType}
+            </p>
+            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                <strong>View:</strong> ${viewType}
+            </p>
+        `;
+        
+        if (this.showOverlay) {
+            legendContent += `
                 <hr style="margin: 0.5rem 0;">
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>Data Type:</strong> ${dataType}
+                    <strong>Health Measure:</strong> ${this.currentHealthMeasure ? this.currentHealthMeasure.substring(0, 40) + '...' : 'None selected'}
                 </p>
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>View:</strong> ${viewType}
-                </p>
-            <hr style="margin: 0.5rem 0;">
-                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                    <strong>All 50 states + DC included</strong>
+                    <strong>SDOH Measure:</strong> ${this.currentSDOHMeasure ? this.currentSDOHMeasure.substring(0, 40) + '...' : 'None selected'}
                 </p>
             `;
+        }
+        
+        legendContent += `
+            <hr style="margin: 0.5rem 0;">
+            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                <strong>All 50 states + DC included</strong>
+            </p>
+        `;
+        
+        this.legendDiv.innerHTML = legendContent;
     }
     
     async loadMeasures() {
@@ -236,9 +269,18 @@ class HealthEquityMap {
                 this.closeSDOHDropdown();
                 
                 // Handle selection
-                if (this.showSDOH) {
+                if (this.showSDOH || this.showOverlay) {
                     this.currentMeasure = value;
-                    if (this.currentMeasure) {
+                    if (this.showOverlay) {
+                        // In overlay mode, set SDOH measure and load if both are selected
+                        this.currentSDOHMeasure = value;
+                        if (this.currentHealthMeasure && this.currentSDOHMeasure) {
+                            this.loadOverlayData();
+                        } else {
+                            this.clearMap();
+                            this.showInitialSummaryStats();
+                        }
+                    } else if (this.currentMeasure) {
                         this.loadSDOHMeasureData();
                     } else {
                         this.clearMap();
@@ -304,12 +346,21 @@ class HealthEquityMap {
     setupEventListeners() {
         // Health measure selection
         document.getElementById('measure-select').addEventListener('change', (e) => {
-            if (!this.showSDOH) {
-            this.currentMeasure = e.target.value;
-            if (this.currentMeasure) {
-                this.loadMeasureData();
-            } else {
-                this.clearMap();
+            if (!this.showSDOH || this.showOverlay) {
+                this.currentMeasure = e.target.value;
+                if (this.showOverlay) {
+                    // In overlay mode, set health measure and load if both are selected
+                    this.currentHealthMeasure = e.target.value;
+                    if (this.currentHealthMeasure && this.currentSDOHMeasure) {
+                        this.loadOverlayData();
+                    } else {
+                        this.clearMap();
+                        this.showInitialSummaryStats();
+                    }
+                } else if (this.currentMeasure) {
+                    this.loadMeasureData();
+                } else {
+                    this.clearMap();
                     this.showInitialSummaryStats();
                 }
             }
@@ -318,9 +369,11 @@ class HealthEquityMap {
         // SDOH measure selection - custom dropdown
         this.setupSDOHDropdownEvents();
         
-        // Data type dropdown (Health vs SDOH)
+        // Data type dropdown (Health vs SDOH vs Overlay)
         document.getElementById('data-type-select').addEventListener('change', (e) => {
-            this.showSDOH = e.target.value === 'sdoh';
+            const selectedValue = e.target.value;
+            this.showSDOH = selectedValue === 'sdoh';
+            this.showOverlay = selectedValue === 'overlay';
             this.toggleDataType();
         });
         
@@ -330,7 +383,9 @@ class HealthEquityMap {
             this.updateToggleText();
             if (this.currentMeasure) {
                 // Reload data from the correct API endpoint
-                if (this.showSDOH) {
+                if (this.showOverlay) {
+                    this.loadOverlayData();
+                } else if (this.showSDOH) {
                     this.loadSDOHMeasureData();
                 } else {
                     this.loadMeasureData();
@@ -341,10 +396,12 @@ class HealthEquityMap {
         // Refresh data button
         document.getElementById('refresh-data').addEventListener('click', () => {
             if (this.currentMeasure) {
-                if (this.showSDOH) {
+                if (this.showOverlay) {
+                    this.loadOverlayData();
+                } else if (this.showSDOH) {
                     this.loadSDOHMeasureData();
                 } else {
-                this.loadMeasureData();
+                    this.loadMeasureData();
                 }
             }
         });
@@ -361,16 +418,26 @@ class HealthEquityMap {
         const healthGroup = document.getElementById('health-measure-group');
         const sdohGroup = document.getElementById('sdoh-measure-group');
         
-        if (this.showSDOH) {
+        if (this.showOverlay) {
+            // Overlay mode: show both measure groups
+            healthGroup.style.display = 'block';
+            sdohGroup.style.display = 'block';
+        } else if (this.showSDOH) {
+            // SDOH mode: show only SDOH group
             healthGroup.style.display = 'none';
             sdohGroup.style.display = 'block';
         } else {
+            // Health mode: show only health group
             healthGroup.style.display = 'block';
             sdohGroup.style.display = 'none';
         }
         
         // Clear current selection and map
         this.currentMeasure = null;
+        this.currentHealthMeasure = null;
+        this.currentSDOHMeasure = null;
+        this.overlayHealthData = [];
+        this.overlaySDOHData = [];
         document.getElementById('measure-select').value = '';
         
         // Reset SDOH dropdown
@@ -428,87 +495,192 @@ class HealthEquityMap {
         
         const valueDescription = location.Data_Value >= quartiles.q3 ? 'High' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low';
         
-        statsContent.innerHTML = `
-            <h4>${location.LocationName} - County Statistics</h4>
-            <p><strong>Selected Measure:</strong> ${measureName.length > 60 ? measureName.substring(0, 60) + '...' : measureName}</p>
+        if (this.showOverlay) {
+            // Overlay mode: show both datasets
+            const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
             
-            <h5>County-Level Data:</h5>
-            <div class="state-stats">
-                <div class="stat-item">
-                    <strong>Value:</strong> ${(() => {
-                        let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
-                        if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
-                            const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
-                            valueDisplay += ` ± ${margin}%`;
-                        }
-                        return valueDisplay + ` ${valueDescription}`;
-                    })()}
+            statsContent.innerHTML = `
+                <h4>${location.LocationName} - County Statistics (Overlay)</h4>
+                <p><strong>Health Measure:</strong> ${this.currentHealthMeasure.length > 60 ? this.currentHealthMeasure.substring(0, 60) + '...' : this.currentHealthMeasure}</p>
+                <p><strong>SDOH Measure:</strong> ${this.currentSDOHMeasure.length > 60 ? this.currentSDOHMeasure.substring(0, 60) + '...' : this.currentSDOHMeasure}</p>
+                
+                <h5>Health Data (${this.currentHealthMeasure}):</h5>
+                <div class="state-stats">
+                    <div class="stat-item">
+                        <strong>Value:</strong> ${(() => {
+                            let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
+                            if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
+                                const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
+                                valueDisplay += ` ± ${margin}%`;
+                            }
+                            return valueDisplay + ` ${valueDescription}`;
+                        })()}
+                    </div>
+                    <div class="stat-item">
+                        <strong>Population:</strong> ${(location.TotalPopulation || 0).toLocaleString()}
+                    </div>
+                    <div class="stat-item">
+                        <strong>State:</strong> ${location.StateDesc}
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <strong>Population:</strong> ${(location.TotalPopulation || 0).toLocaleString()}
+                
+                ${matchingSDOH ? `
+                    <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
+                    <div class="state-stats" style="background: #f0f8ff; border-left: 4px solid #8B0080;">
+                        <div class="stat-item">
+                            <strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Population:</strong> ${(matchingSDOH.TotalPopulation || 0).toLocaleString()}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Data Type:</strong> ${matchingSDOH.Data_Value_Type || 'survey data'}
+                        </div>
+                    </div>
+                ` : `
+                    <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
+                    <div class="state-stats" style="background: #f8f8f8; border-left: 4px solid #ccc;">
+                        <div class="stat-item">
+                            <strong>Status:</strong> <span style="color: #666; font-style: italic;">No matching SDOH data available</span>
+                        </div>
+                    </div>
+                `}
+                
+                <h5>Location Context:</h5>
+                <div class="state-context">
+                    <p><strong>Data Type:</strong> Direct measurement from ${location.Data_Value_Type || 'survey data'}</p>
+                    <p><strong>Reliability:</strong> ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 'High (confidence interval available)' : 'Standard'}</p>
+                    <p><strong>Population Size:</strong> ${(location.TotalPopulation || 0) >= 100000 ? 'Large' : (location.TotalPopulation || 0) >= 10000 ? 'Medium' : 'Small'} county</p>
                 </div>
-                <div class="stat-item">
-                    <strong>State:</strong> ${location.StateDesc}
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                    <em>Click on other county markers to view their statistics</em>
+                </p>
+            `;
+        } else {
+            // Regular mode: show single dataset
+            statsContent.innerHTML = `
+                <h4>${location.LocationName} - County Statistics</h4>
+                <p><strong>Selected Measure:</strong> ${measureName.length > 60 ? measureName.substring(0, 60) + '...' : measureName}</p>
+                
+                <h5>County-Level Data:</h5>
+                <div class="state-stats">
+                    <div class="stat-item">
+                        <strong>Value:</strong> ${(() => {
+                            let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
+                            if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
+                                const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
+                                valueDisplay += ` ± ${margin}%`;
+                            }
+                            return valueDisplay + ` ${valueDescription}`;
+                        })()}
+                    </div>
+                    <div class="stat-item">
+                        <strong>Population:</strong> ${(location.TotalPopulation || 0).toLocaleString()}
+                    </div>
+                    <div class="stat-item">
+                        <strong>State:</strong> ${location.StateDesc}
+                    </div>
                 </div>
-            </div>
-            
-            <h5>Location Context:</h5>
-            <div class="state-context">
-                <p><strong>Data Type:</strong> Direct measurement from ${location.Data_Value_Type || 'survey data'}</p>
-                <p><strong>Reliability:</strong> ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 'High (confidence interval available)' : 'Standard'}</p>
-                <p><strong>Population Size:</strong> ${(location.TotalPopulation || 0) >= 100000 ? 'Large' : (location.TotalPopulation || 0) >= 10000 ? 'Medium' : 'Small'} county</p>
-            </div>
-            
-            <hr style="margin: 1rem 0;">
-            <p style="font-size: 0.8rem; color: #666; margin: 0;">
-                <em>Click on other county markers to view their statistics</em>
-            </p>
-        `;
+                
+                <h5>Location Context:</h5>
+                <div class="state-context">
+                    <p><strong>Data Type:</strong> Direct measurement from ${location.Data_Value_Type || 'survey data'}</p>
+                    <p><strong>Reliability:</strong> ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 'High (confidence interval available)' : 'Standard'}</p>
+                    <p><strong>Population Size:</strong> ${(location.TotalPopulation || 0) >= 100000 ? 'Large' : (location.TotalPopulation || 0) >= 10000 ? 'Medium' : 'Small'} county</p>
+                </div>
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                    <em>Click on other county markers to view their statistics</em>
+                </p>
+            `;
+        }
     }
     
     showInitialSummaryStats() {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
-        statsContent.innerHTML = `
-            <h4>Health Equity Heatmap</h4>
-            <p><strong>Data Coverage:</strong> 28 health measures across all 50 states + DC</p>
-            <p><strong>Total Locations:</strong> 3,142 counties</p>
-            <p><strong>Population Coverage:</strong> 330+ million Americans</p>
-            
-            <h5>Available Measures:</h5>
-            <div class="measure-categories">
-                <div class="category">
-                    <strong>Chronic Conditions:</strong>
-                    <ul>
-                        <li>Diabetes, Heart Disease, Cancer</li>
-                        <li>Asthma, COPD, Stroke</li>
-                        <li>High Blood Pressure, High Cholesterol</li>
-                    </ul>
+        if (this.showOverlay) {
+            statsContent.innerHTML = `
+                <h4>SDOH/Health Measure Overlay</h4>
+                <p><strong>Mode:</strong> Compare health measures with social determinants of health</p>
+                <p><strong>Instructions:</strong> Select both a health measure and an SDOH measure to view combined data</p>
+                
+                <div class="state-context" style="background: #e8f4fd; border-left: 4px solid #8B0080;">
+                    <h5>Current Selection:</h5>
+                    <p><strong>Health Measure:</strong> ${this.currentHealthMeasure || 'None selected'}</p>
+                    <p><strong>SDOH Measure:</strong> ${this.currentSDOHMeasure || 'None selected'}</p>
                 </div>
-                <div class="category">
-                    <strong>Preventive Care:</strong>
-                    <ul>
-                        <li>Cancer Screenings</li>
-                        <li>Annual Checkups</li>
-                        <li>Cholesterol Screening</li>
-                    </ul>
+                
+                <h5>How Overlay Works:</h5>
+                <div class="measure-categories">
+                    <div class="category">
+                        <strong>Data Display:</strong>
+                        <ul>
+                            <li>Map markers show health data values</li>
+                            <li>Popups display both health and SDOH values</li>
+                            <li>Sidebar shows detailed comparison</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <strong>Matching:</strong>
+                        <ul>
+                            <li>Data matched by county name and state</li>
+                            <li>Shows "No matching data" when unavailable</li>
+                            <li>Purple gradient indicates overlay mode</li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="category">
-                    <strong>Lifestyle Factors:</strong>
-                    <ul>
-                        <li>Smoking, Obesity</li>
-                        <li>Physical Activity</li>
-                        <li>Sleep Patterns</li>
-                    </ul>
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.9rem; color: #666; margin: 0;">
+                    <strong>Next Steps:</strong> Select both measures from the dropdowns above to begin overlay analysis.
+                </p>
+            `;
+        } else {
+            statsContent.innerHTML = `
+                <h4>Health Equity Heatmap</h4>
+                <p><strong>Data Coverage:</strong> 28 health measures across all 50 states + DC</p>
+                <p><strong>Total Locations:</strong> 3,142 counties</p>
+                <p><strong>Population Coverage:</strong> 330+ million Americans</p>
+                
+                <h5>Available Measures:</h5>
+                <div class="measure-categories">
+                    <div class="category">
+                        <strong>Chronic Conditions:</strong>
+                        <ul>
+                            <li>Diabetes, Heart Disease, Cancer</li>
+                            <li>Asthma, COPD, Stroke</li>
+                            <li>High Blood Pressure, High Cholesterol</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <strong>Preventive Care:</strong>
+                        <ul>
+                            <li>Cancer Screenings</li>
+                            <li>Annual Checkups</li>
+                            <li>Cholesterol Screening</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <strong>Lifestyle Factors:</strong>
+                        <ul>
+                            <li>Smoking, Obesity</li>
+                            <li>Physical Activity</li>
+                            <li>Sleep Patterns</li>
+                        </ul>
+                    </div>
                 </div>
-            </div>
-            
-            <hr style="margin: 1rem 0;">
-            <p style="font-size: 0.9rem; color: #666; margin: 0;">
-                <strong>Instructions:</strong> Select a health measure from the dropdown above to view data on the map. Use the toggle switch to switch between county-level and state-level views.
-            </p>
-        `;
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.9rem; color: #666; margin: 0;">
+                    <strong>Instructions:</strong> Select a health measure from the dropdown above to view data on the map. Use the toggle switch to switch between county-level and state-level views.
+                </p>
+            `;
+        }
     }
     
     async loadMeasureData() {
@@ -612,6 +784,89 @@ class HealthEquityMap {
         } catch (error) {
             console.error('Error loading SDOH measure data:', error);
             this.showError('Failed to load SDOH data for the selected measure.');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    findMatchingData(healthData, sdohData, location) {
+        // Find matching SDOH data for a health location
+        const matchingSDOH = sdohData.find(sdoh => 
+            sdoh.LocationName === location.LocationName && 
+            sdoh.StateDesc === location.StateDesc
+        );
+        
+        return matchingSDOH || null;
+    }
+    
+    findMatchingHealthData(healthData, sdohData, location) {
+        // Find matching health data for an SDOH location
+        const matchingHealth = healthData.find(health => 
+            health.LocationName === location.LocationName && 
+            health.StateDesc === location.StateDesc
+        );
+        
+        return matchingHealth || null;
+    }
+
+    async loadOverlayData() {
+        if (!this.currentHealthMeasure || !this.currentSDOHMeasure) {
+            this.showError('Please select both a health measure and an SDOH measure for overlay mode.');
+            return;
+        }
+        
+        this.showLoading(true);
+        
+        try {
+            console.log('Loading overlay data for health measure:', this.currentHealthMeasure, 'and SDOH measure:', this.currentSDOHMeasure);
+            
+            // Load both health and SDOH data simultaneously
+            const [healthResponse, sdohResponse] = await Promise.all([
+                fetch(this.isStateView ? 
+                    `/api/state-measure-data/${encodeURIComponent(this.currentHealthMeasure)}` :
+                    `/api/measure-data/${encodeURIComponent(this.currentHealthMeasure)}`),
+                fetch(`/api/sdoh-measure-data/${encodeURIComponent(this.currentSDOHMeasure)}`)
+            ]);
+            
+            if (!healthResponse.ok) {
+                throw new Error(`HTTP error loading health data! status: ${healthResponse.status}`);
+            }
+            if (!sdohResponse.ok) {
+                throw new Error(`HTTP error loading SDOH data! status: ${sdohResponse.status}`);
+            }
+            
+            this.overlayHealthData = await healthResponse.json();
+            this.overlaySDOHData = await sdohResponse.json();
+            
+            console.log('Loaded health data for overlay:', this.overlayHealthData.length, 'records');
+            console.log('Loaded SDOH data for overlay:', this.overlaySDOHData.length, 'records');
+            
+            // Create combined dataset for rendering (use health data as primary)
+            this.currentData = this.overlayHealthData;
+            
+            if (this.currentData.length === 0) {
+                this.showError('No data available for the selected measures in overlay mode.');
+                return;
+            }
+            
+            // Check if we should render markers based on view mode and zoom level
+            const currentZoom = this.map.getZoom();
+            const shouldShowMarkers = this.isStateView || currentZoom >= this.minZoomForMarkers;
+            
+            if (shouldShowMarkers) {
+                console.log('Rendering overlay markers...');
+                this.renderMap();
+            } else {
+                console.log('Zoom level too low for county markers, not rendering');
+                this.markersVisible = false;
+            }
+            
+            this.updateStatsPanel();
+            this.updateLegendContent();
+            
+        } catch (error) {
+            console.error('Error loading overlay data:', error);
+            this.showError('Failed to load overlay data for the selected measures.');
         } finally {
             this.showLoading(false);
         }
@@ -897,14 +1152,41 @@ class HealthEquityMap {
             valueDisplay += ` ± ${margin}`;
         }
         
-        const popupContent = `
-            <div class="popup-content">
-                <h4>${location.LocationName || 'Unknown Location'}</h4>
-                <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
-                <p><strong>Value:</strong> ${valueDisplay}</p>
-                <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
-            </div>
-        `;
+        let popupContent;
+        
+        if (this.showOverlay) {
+            // Overlay mode: show both health and SDOH data
+            const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+            
+            popupContent = `
+                <div class="popup-content">
+                    <h4>${location.LocationName || 'Unknown Location'}</h4>
+                    <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
+                    <hr style="margin: 0.5rem 0;">
+                    <h5>Health Data (${this.currentHealthMeasure}):</h5>
+                    <p><strong>Value:</strong> ${valueDisplay}</p>
+                    ${matchingSDOH ? `
+                        <hr style="margin: 0.5rem 0;">
+                        <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
+                        <p><strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'}</p>
+                    ` : `
+                        <p style="color: #666; font-style: italic;">No matching SDOH data available</p>
+                    `}
+                    <hr style="margin: 0.5rem 0;">
+                    <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
+                </div>
+            `;
+        } else {
+            // Regular mode: show single data value
+            popupContent = `
+                <div class="popup-content">
+                    <h4>${location.LocationName || 'Unknown Location'}</h4>
+                    <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
+                    <p><strong>Value:</strong> ${valueDisplay}</p>
+                    <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
+                </div>
+            `;
+        }
         
         marker.bindPopup(popupContent);
         
@@ -958,7 +1240,10 @@ class HealthEquityMap {
         const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
         
         // Use different color schemes based on data type
-        if (this.showSDOH) {
+        if (this.showOverlay) {
+            // Overlay mode: white (low) to purple (high) to distinguish from individual modes
+            return this.getGradientColor(normalized, '#ffffff', '#8B0080');
+        } else if (this.showSDOH) {
             // SDOH data: white (low) to blue (high)
             return this.getGradientColor(normalized, '#ffffff', '#0066cc');
         } else {
