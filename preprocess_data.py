@@ -273,11 +273,21 @@ def create_safe_filename(measure):
     safe_name = re.sub(r'[-\s]+', '_', safe_name)
     return safe_name[:50] + '.csv'
 
+def load_sdoh_column_descriptions():
+    """Load SDOH column descriptions from the coding file"""
+    try:
+        coding_df = pd.read_csv('data/SDOH_2020_COUNTY_1_0_coding.csv', encoding='latin-1')
+        # Create a dictionary mapping column names to their labels
+        return dict(zip(coding_df['name'], coding_df['label']))
+    except Exception as e:
+        print(f"Error loading SDOH coding file: {e}")
+        return {}
+
 def preprocess_sdoh_data():
-    """Preprocess SDOH county data"""
+    """Preprocess SDOH county data - include ALL columns from the original dataset"""
     print("\nLoading SDOH county data...")
     try:
-        df = pd.read_csv('data/SDOH_2020_COUNTY_1_0_data.csv')
+        df = pd.read_csv('data/SDOH_2020_COUNTY_1_0_data.csv', encoding='latin-1')
         print(f"SDOH data shape: {df.shape}")
         
         # Clean the data - remove rows with missing COUNTYFIPS
@@ -286,70 +296,46 @@ def preprocess_sdoh_data():
         # Ensure COUNTYFIPS is 5 digits with leading zeros
         df['COUNTYFIPS'] = df['COUNTYFIPS'].astype(str).str.zfill(5)
         
-        # Select key SDOH indicators for mapping
-        key_indicators = {
-            'ACS_MEDIAN_HH_INC': 'Median Household Income',
-            'SAIPE_PCT_POV': 'Poverty Rate',
-            'ACS_PCT_UNINSURED': 'Uninsured Rate',
-            'ACS_PCT_LT_HS': 'Less than High School Education',
-            'ACS_PCT_BACHELOR_DGR': 'Bachelor Degree or Higher',
-            'ACS_PCT_EMPLOYED': 'Employment Rate',
-            'ACS_PCT_UNEMPLOY': 'Unemployment Rate',
-            'ACS_PCT_DISABLE': 'Disability Rate',
-            'ACS_PCT_FOREIGN_BORN': 'Foreign Born Population',
-            'ACS_PCT_HISPANIC': 'Hispanic Population',
-            'ACS_PCT_BLACK': 'Black Population',
-            'ACS_PCT_WHITE': 'White Population',
-            'ACS_PCT_ASIAN': 'Asian Population',
-            'ACS_PCT_AIAN': 'American Indian/Alaska Native Population',
-            'ACS_PCT_OWNER_HU': 'Homeownership Rate',
-            'ACS_PCT_RENTER_HU_COST_30PCT': 'Rent Burden (30%+ income)',
-            'ACS_PCT_HH_INTERNET': 'Internet Access Rate',
-            'ACS_PCT_HH_BROADBAND': 'Broadband Access Rate',
-            'ACS_PCT_DRIVE_2WORK': 'Drive to Work Rate',
-            'ACS_PCT_PUBL_TRANSIT': 'Public Transit to Work Rate',
-            'ACS_PCT_WALK_2WORK': 'Walk to Work Rate',
-            'ACS_PCT_MEDICAID_ANY': 'Medicaid Coverage Rate',
-            'ACS_PCT_PRIVATE_ANY': 'Private Insurance Rate',
-            'ACS_PCT_UNINSURED_BELOW64': 'Uninsured Under 65 Rate',
-            'ACS_PCT_HH_FOOD_STMP': 'Food Stamp/SNAP Usage Rate',
-            'ACS_PCT_HH_PUB_ASSIST': 'Public Assistance Rate',
-            'ACS_GINI_INDEX': 'Income Inequality (Gini Index)',
-            'ACS_PER_CAPITA_INC': 'Per Capita Income',
-            'ACS_MEDIAN_AGE': 'Median Age',
-            'ACS_PCT_AGE_ABOVE65': 'Population 65+ Rate',
-            'ACS_PCT_AGE_0_17': 'Population Under 18 Rate',
-            'CEN_POPDENSITY_COUNTY': 'Population Density',
-            'AHRF_UNEMPLOYED_RATE': 'Unemployment Rate (AHRF)',
-            'AHRF_DAYS_AIR_QLT': 'Air Quality Days',
-            'AHRF_PCT_GOOD_AQ': 'Good Air Quality Days',
-            'AHRF_HPSA_PRIM': 'Primary Care HPSA',
-            'AHRF_HPSA_DENTIST': 'Dental HPSA',
-            'AHRF_HPSA_MENTAL': 'Mental Health HPSA'
-        }
+        # Define columns to exclude (non-SDOH data)
+        exclude_cols = [
+            'YEAR', 'COUNTYFIPS', 'STATEFIPS', 'STATE', 'COUNTY', 'REGION', 'TERRITORY'
+        ]
         
-        # Create a subset with key indicators
-        sdoh_subset = df[['COUNTYFIPS', 'STATE', 'COUNTY'] + list(key_indicators.keys())].copy()
+        # Get all columns except the excluded ones
+        data_cols = [col for col in df.columns if col not in exclude_cols]
         
-        # Rename columns for better readability
-        column_mapping = {'COUNTYFIPS': 'CountyFIPS', 'STATE': 'State', 'COUNTY': 'County'}
-        column_mapping.update(key_indicators)
-        sdoh_subset = sdoh_subset.rename(columns=column_mapping)
+        print(f"Found {len(data_cols)} data columns in SDOH dataset")
+        
+        # Create a subset with ALL data columns (including COUNTYFIPS for merging)
+        sdoh_subset = df[['COUNTYFIPS'] + data_cols].copy()
+        
+        # Rename COUNTYFIPS for consistency
+        sdoh_subset = sdoh_subset.rename(columns={
+            'COUNTYFIPS': 'CountyFIPS'
+        })
         
         # Save cleaned SDOH data
         sdoh_subset.to_csv('data/sdoh_county_cleaned.csv', index=False)
         print(f"Saved {len(sdoh_subset)} SDOH county records")
         
-        # Create SDOH measures list
+        # Get column descriptions from coding file
+        column_descriptions = load_sdoh_column_descriptions()
+        
+        # Create SDOH measures list for ALL data columns
         sdoh_measures = []
-        for col, name in key_indicators.items():
-            if col in sdoh_subset.columns:
-                sdoh_measures.append({
-                    'Measure_Clean': name,
-                    'Measure_Short': name.split('(')[0].strip(),
-                    'SDOH_Column': col,
-                    'Data_Type': 'SDOH'
-                })
+        for col in data_cols:
+            # Get descriptive name from coding file, or create one from column name
+            clean_name = column_descriptions.get(col, col.replace('_', ' ').title())
+            
+            # Create a short name (first few words)
+            short_name = ' '.join(clean_name.split()[:3])  # First 3 words
+            
+            sdoh_measures.append({
+                'Measure_Clean': clean_name,
+                'Measure_Short': short_name,
+                'SDOH_Column': col,  # Keep original column name for data access
+                'Data_Type': 'SDOH'
+            })
         
         sdoh_measures_df = pd.DataFrame(sdoh_measures)
         sdoh_measures_df.to_csv('data/sdoh_measures.csv', index=False)

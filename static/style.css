@@ -171,11 +171,130 @@ header h1 {
 .controls select {
     background: #34495e;
     color: white;
-    min-width: 300px;
+    min-width: 500px;
+    max-width: 600px;
+}
+
+.controls select#data-type-select {
+    min-width: auto;
+    max-width: 150px;
+    width: auto;
 }
 
 .controls select:focus {
     outline: 2px solid #3498db;
+}
+
+.controls select option {
+    white-space: normal;
+    word-wrap: break-word;
+    padding: 8px;
+}
+
+/* Custom Dropdown Styles */
+.custom-dropdown {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+}
+
+.dropdown-selected {
+    background: #34495e;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 40px;
+    border: 2px solid transparent;
+    transition: border-color 0.3s ease;
+}
+
+.dropdown-selected:hover {
+    background: #3a5163;
+}
+
+.dropdown-selected:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.dropdown-arrow {
+    transition: transform 0.3s ease;
+    font-size: 0.8rem;
+}
+
+.dropdown-selected.open .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.dropdown-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    color: #333;
+}
+
+.dropdown-option {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.4;
+    transition: background-color 0.2s ease;
+    color: #333;
+    background-color: white;
+}
+
+.dropdown-option:hover {
+    background-color: #f8f9fa;
+}
+
+.dropdown-option:last-child {
+    border-bottom: none;
+}
+
+.dropdown-option.selected {
+    background-color: #3498db;
+    color: white;
+}
+
+.dropdown-search {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
+}
+
+.dropdown-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    outline: none;
+    color: #333;
+    background-color: white;
+}
+
+.dropdown-search input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.dropdown-options-list {
+    max-height: 250px;
+    overflow-y: auto;
 }
 
 .btn-primary {

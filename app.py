@@ -10,6 +10,8 @@ app = Flask(__name__)
 # Global variables for caching
 locations_data = None
 measures_data = None
+sdoh_data = None
+sdoh_measures_data = None
 
 def load_locations_data():
     """Load preprocessed county locations data"""
@@ -40,6 +42,30 @@ def load_measures_data():
             create_measures_list()
             measures_data = pd.read_csv('data/available_measures.csv')
     return measures_data
+
+def load_sdoh_data():
+    """Load SDOH county data"""
+    global sdoh_data
+    if sdoh_data is None:
+        try:
+            sdoh_data = pd.read_csv('data/sdoh_county_cleaned.csv')
+            print(f"Loaded {len(sdoh_data)} SDOH county records from cache")
+        except FileNotFoundError:
+            print("SDOH data not found")
+            sdoh_data = pd.DataFrame()
+    return sdoh_data
+
+def load_sdoh_measures_data():
+    """Load SDOH measures"""
+    global sdoh_measures_data
+    if sdoh_measures_data is None:
+        try:
+            sdoh_measures_data = pd.read_csv('data/sdoh_measures.csv')
+            print(f"Loaded {len(sdoh_measures_data)} SDOH measures from cache")
+        except FileNotFoundError:
+            print("SDOH measures not found")
+            sdoh_measures_data = pd.DataFrame()
+    return sdoh_measures_data
 
 def create_county_locations_summary():
     """Create county locations summary from raw data (one-time setup)"""
@@ -333,6 +359,79 @@ def create_safe_filename(measure):
     safe_name = re.sub(r'[^\w\s-]', '', measure)
     safe_name = re.sub(r'[-\s]+', '_', safe_name)
     return safe_name[:50] + '.csv'
+
+@app.route('/api/sdoh-measures')
+def get_sdoh_measures():
+    """API endpoint to get available SDOH measures"""
+    try:
+        sdoh_measures = load_sdoh_measures_data()
+        if sdoh_measures.empty:
+            return jsonify([])
+        
+        measures_list = []
+        for _, row in sdoh_measures.iterrows():
+            measures_list.append({
+                'name': row['Measure_Clean'],
+                'short_name': row['Measure_Short'],
+                'column': row['SDOH_Column'],
+                'data_type': row['Data_Type']
+            })
+        
+        return jsonify(measures_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/sdoh-measure-data/<measure_name>')
+def get_sdoh_measure_data(measure_name):
+    """API endpoint to get SDOH data for a specific measure"""
+    try:
+        sdoh_data = load_sdoh_data()
+        sdoh_measures = load_sdoh_measures_data()
+        locations_data = load_locations_data()
+        
+        if sdoh_data.empty or sdoh_measures.empty or locations_data.empty:
+            return jsonify([])
+        
+        # Find the measure column
+        measure_row = sdoh_measures[sdoh_measures['Measure_Clean'] == measure_name]
+        if measure_row.empty:
+            return jsonify({"error": "Measure not found"}), 404
+        
+        column_name = measure_row.iloc[0]['SDOH_Column']
+        
+        if column_name not in sdoh_data.columns:
+            return jsonify({"error": "Column not found in data"}), 404
+        
+        # Merge SDOH data with locations data to get lat/lng coordinates
+        sdoh_data['CountyFIPS'] = sdoh_data['CountyFIPS'].astype(str).str.zfill(5)
+        locations_data['CountyFIPS'] = locations_data['CountyFIPS'].astype(str).str.zfill(5)
+        
+        merged_data = sdoh_data.merge(
+            locations_data[['CountyFIPS', 'lat', 'lng', 'TotalPopulation']], 
+            on='CountyFIPS', 
+            how='left'
+        )
+        
+        # Prepare data for the map
+        data_list = []
+        for _, row in merged_data.iterrows():
+            if pd.notna(row[column_name]) and pd.notna(row['CountyFIPS']):
+                data_list.append({
+                    'CountyFIPS': str(row['CountyFIPS']).zfill(5),
+                    'CountyName': 'Unknown County',  # SDOH data doesn't have county names
+                    'StateDesc': 'Unknown State',    # SDOH data doesn't have state names
+                    'lat': float(row['lat']) if pd.notna(row['lat']) else 0,
+                    'lng': float(row['lng']) if pd.notna(row['lng']) else 0,
+                    'TotalPopulation': float(row['TotalPopulation']) if pd.notna(row['TotalPopulation']) else 0,
+                    'Data_Value': float(row[column_name]),
+                    'Data_Value_Unit': '%',  # Most SDOH measures are percentages
+                    'Data_Value_Type': 'SDOH',
+                    'Measure_Short': measure_row.iloc[0]['Measure_Short']
+                })
+        
+        return jsonify(data_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/sdoh-data')
 def get_sdoh_data():

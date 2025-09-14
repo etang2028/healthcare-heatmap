@@ -13,10 +13,34 @@
             <h1>Health Equity Heatmap</h1>
             <div class="controls">
                 <div class="control-group">
+                    <label for="data-type-select">Data Type:</label>
+                    <select id="data-type-select">
+                        <option value="health">Health Data</option>
+                        <option value="sdoh">SDOH Data</option>
+                    </select>
+                </div>
+                <div class="control-group" id="health-measure-group">
                     <label for="measure-select">Select Health Measure:</label>
                     <select id="measure-select">
                         <option value="">Loading measures...</option>
                     </select>
+                </div>
+                <div class="control-group" id="sdoh-measure-group" style="display: none;">
+                    <label for="sdoh-measure-select">Select SDOH Measure:</label>
+                    <div class="custom-dropdown" id="sdoh-dropdown-container">
+                        <div class="dropdown-selected" id="sdoh-dropdown-selected">
+                            <span>Select an SDOH measure...</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="dropdown-options" id="sdoh-dropdown-options" style="display: none;">
+                            <div class="dropdown-search">
+                                <input type="text" id="sdoh-search" placeholder="Search SDOH measures..." />
+                            </div>
+                            <div class="dropdown-options-list" id="sdoh-options-list">
+                                <!-- Options will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="control-group">
                     <label for="view-toggle" class="toggle-label">
@@ -26,7 +50,6 @@
                     </label>
                 </div>
                 <div class="control-group">
-                    <button id="toggle-sdoh" class="btn-secondary">Toggle SDOH Data</button>
                     <button id="refresh-data" class="btn-primary">Refresh Data</button>
                 </div>
             </div>

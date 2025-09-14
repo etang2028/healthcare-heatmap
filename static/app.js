@@ -6,6 +6,7 @@ class HealthEquityMap {
         this.markers = [];
         this.showSDOH = false;
         this.availableMeasures = [];
+        this.availableSDOHMeasures = [];
         this.minZoomForMarkers = 4; // Minimum zoom level to show markers
         this.markersVisible = false;
         this.isStateView = false; // Toggle between state and county view
@@ -16,6 +17,7 @@ class HealthEquityMap {
     async init() {
         this.initMap();
         await this.loadMeasures();
+        await this.loadSDOHMeasures();
         this.setupEventListeners();
         this.showInitialSummaryStats();
     }
@@ -43,7 +45,7 @@ class HealthEquityMap {
         
         this.legend.onAdd = (map) => {
             this.legendDiv = L.DomUtil.create('div', 'legend');
-            // Show default legend initially
+            // Show default legend initially (will be updated when data is loaded)
             this.legendDiv.innerHTML = `
                 <h4>Data Value Legend</h4>
                 <div class="legend-gradient" style="
@@ -71,12 +73,13 @@ class HealthEquityMap {
     updateLegendContent() {
         if (!this.legendDiv) return;
         
-        const measureType = this.isPositiveMeasure(this.currentMeasure) ? 'Positive' : 'Negative';
+        const measureType = 'Measure';
         const lowColor = '#ffffff';
-        const highColor = '#8B0000';
+        const highColor = this.showSDOH ? '#0066cc' : '#8B0000';
         const lowDescription = 'Low';
         const highDescription = 'High';
         const viewType = this.isStateView ? 'State-level aggregation' : 'County-level data';
+        const dataType = this.showSDOH ? 'SDOH Data' : 'Health Data';
         
         this.legendDiv.innerHTML = `
             <h4>Data Value Legend</h4>
@@ -91,15 +94,18 @@ class HealthEquityMap {
                 <span>${lowDescription}</span>
                 <span>${highDescription}</span>
             </div>
-            <hr style="margin: 0.5rem 0;">
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                <hr style="margin: 0.5rem 0;">
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                <strong>Data Type:</strong> ${dataType}
+                </p>
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
                 <strong>View:</strong> ${viewType}
-            </p>
+                </p>
             <hr style="margin: 0.5rem 0;">
-            <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                <strong>All 50 states + DC included</strong>
-            </p>
-        `;
+                <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
+                    <strong>All 50 states + DC included</strong>
+                </p>
+            `;
     }
     
     async loadMeasures() {
@@ -128,6 +134,29 @@ class HealthEquityMap {
             this.showLoading(false);
         }
     }
+
+    async loadSDOHMeasures() {
+        try {
+            console.log('Loading SDOH measures...');
+            const response = await fetch('/api/sdoh-measures');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            this.availableSDOHMeasures = await response.json();
+            
+            // Populate the SDOH measure dropdown
+            this.populateSDOHMeasureDropdown();
+            
+            console.log('Loaded SDOH measures:', this.availableSDOHMeasures.length);
+            console.log('Sample SDOH measures:', this.availableSDOHMeasures.slice(0, 5));
+            
+        } catch (error) {
+            console.error('Error loading SDOH measures:', error);
+            this.showError('Failed to load SDOH measures. Please try again.');
+        }
+    }
     
     populateMeasureDropdown() {
         const select = document.getElementById('measure-select');
@@ -151,36 +180,172 @@ class HealthEquityMap {
         
         console.log('Dropdown populated with', select.options.length - 1, 'options');
     }
+
+    populateSDOHMeasureDropdown() {
+        const optionsList = document.getElementById('sdoh-options-list');
+        
+        // Clear existing options
+        optionsList.innerHTML = '';
+        
+        console.log('Populating SDOH dropdown with', this.availableSDOHMeasures.length, 'measures');
+        
+        // Add SDOH measures
+        this.availableSDOHMeasures.forEach((measure, index) => {
+            const option = document.createElement('div');
+            option.className = 'dropdown-option';
+            option.setAttribute('data-value', measure.name);
+            option.textContent = measure.name;
+            optionsList.appendChild(option);
+            
+            if (index < 5) {
+                console.log(`Added SDOH measure ${index + 1}:`, measure.name);
+            }
+        });
+        
+        console.log('SDOH dropdown populated with', optionsList.children.length, 'options');
+    }
+    
+    setupSDOHDropdownEvents() {
+        const selectedElement = document.getElementById('sdoh-dropdown-selected');
+        const optionsContainer = document.getElementById('sdoh-dropdown-options');
+        const optionsList = document.getElementById('sdoh-options-list');
+        const searchInput = document.getElementById('sdoh-search');
+        
+        // Toggle dropdown on click
+        selectedElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = optionsContainer.style.display === 'block';
+            
+            if (isOpen) {
+                this.closeSDOHDropdown();
+            } else {
+                this.openSDOHDropdown();
+            }
+        });
+        
+        // Handle option selection
+        optionsList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('dropdown-option')) {
+                const value = e.target.getAttribute('data-value');
+                const text = e.target.textContent;
+                
+                // Update selected text
+                selectedElement.querySelector('span:first-child').textContent = text;
+                
+                // Close dropdown
+                this.closeSDOHDropdown();
+                
+                // Handle selection
+                if (this.showSDOH) {
+                    this.currentMeasure = value;
+                    if (this.currentMeasure) {
+                        this.loadSDOHMeasureData();
+                    } else {
+                        this.clearMap();
+                        this.showInitialSummaryStats();
+                    }
+                }
+            }
+        });
+        
+        // Search functionality
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const options = optionsList.querySelectorAll('.dropdown-option');
+            
+            options.forEach(option => {
+                const text = option.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+        });
+        
+        // Prevent search input from closing dropdown
+        searchInput.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!selectedElement.contains(e.target) && !optionsContainer.contains(e.target)) {
+                this.closeSDOHDropdown();
+            }
+        });
+    }
+    
+    openSDOHDropdown() {
+        const selectedElement = document.getElementById('sdoh-dropdown-selected');
+        const optionsContainer = document.getElementById('sdoh-dropdown-options');
+        const searchInput = document.getElementById('sdoh-search');
+        
+        selectedElement.classList.add('open');
+        optionsContainer.style.display = 'block';
+        
+        // Clear search and show all options
+        searchInput.value = '';
+        const options = document.querySelectorAll('#sdoh-options-list .dropdown-option');
+        options.forEach(option => option.style.display = 'block');
+        
+        // Focus on search input
+        setTimeout(() => searchInput.focus(), 100);
+    }
+    
+    closeSDOHDropdown() {
+        const selectedElement = document.getElementById('sdoh-dropdown-selected');
+        const optionsContainer = document.getElementById('sdoh-dropdown-options');
+        
+        selectedElement.classList.remove('open');
+        optionsContainer.style.display = 'none';
+    }
     
     setupEventListeners() {
+        // Health measure selection
         document.getElementById('measure-select').addEventListener('change', (e) => {
+            if (!this.showSDOH) {
             this.currentMeasure = e.target.value;
             if (this.currentMeasure) {
                 this.loadMeasureData();
             } else {
                 this.clearMap();
-                this.showInitialSummaryStats();
+                    this.showInitialSummaryStats();
+                }
             }
         });
         
+        // SDOH measure selection - custom dropdown
+        this.setupSDOHDropdownEvents();
+        
+        // Data type dropdown (Health vs SDOH)
+        document.getElementById('data-type-select').addEventListener('change', (e) => {
+            this.showSDOH = e.target.value === 'sdoh';
+            this.toggleDataType();
+        });
+        
+        // State view toggle
         document.getElementById('view-toggle').addEventListener('change', (e) => {
             this.isStateView = e.target.checked;
             this.updateToggleText();
             if (this.currentMeasure) {
                 // Reload data from the correct API endpoint
-                this.loadMeasureData();
+                if (this.showSDOH) {
+                    this.loadSDOHMeasureData();
+                } else {
+                    this.loadMeasureData();
+                }
             }
         });
         
-        document.getElementById('toggle-sdoh').addEventListener('click', () => {
-            this.showSDOH = !this.showSDOH;
-            // SDOH functionality not implemented yet
-            console.log('SDOH toggle:', this.showSDOH);
-        });
-        
+        // Refresh data button
         document.getElementById('refresh-data').addEventListener('click', () => {
             if (this.currentMeasure) {
+                if (this.showSDOH) {
+                    this.loadSDOHMeasureData();
+                } else {
                 this.loadMeasureData();
+                }
             }
         });
     }
@@ -191,15 +356,37 @@ class HealthEquityMap {
             toggleText.textContent = 'State View';
         }
     }
+
+    toggleDataType() {
+        const healthGroup = document.getElementById('health-measure-group');
+        const sdohGroup = document.getElementById('sdoh-measure-group');
+        
+        if (this.showSDOH) {
+            healthGroup.style.display = 'none';
+            sdohGroup.style.display = 'block';
+        } else {
+            healthGroup.style.display = 'block';
+            sdohGroup.style.display = 'none';
+        }
+        
+        // Clear current selection and map
+        this.currentMeasure = null;
+        document.getElementById('measure-select').value = '';
+        
+        // Reset SDOH dropdown
+        const sdohSelected = document.getElementById('sdoh-dropdown-selected');
+        sdohSelected.querySelector('span:first-child').textContent = 'Select an SDOH measure...';
+        this.closeSDOHDropdown();
+        
+        this.clearMap();
+        this.showInitialSummaryStats();
+    }
     
     updateStateStatsPanel(state, measureName, quartiles) {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
-        const isPositive = this.isPositiveMeasure(measureName);
-        const valueDescription = isPositive ? 
-            (state.avgValue >= quartiles.q3 ? 'High (Good)' : state.avgValue >= quartiles.q2 ? 'Medium-High' : state.avgValue >= quartiles.q1 ? 'Medium-Low' : 'Low (Bad)') :
-            (state.avgValue >= quartiles.q3 ? 'High (Bad)' : state.avgValue >= quartiles.q2 ? 'Medium-High' : state.avgValue >= quartiles.q1 ? 'Medium-Low' : 'Low (Good)');
+        const valueDescription = state.avgValue >= quartiles.q3 ? 'High' : state.avgValue >= quartiles.q2 ? 'Medium-High' : state.avgValue >= quartiles.q1 ? 'Medium-Low' : 'Low';
         
         statsContent.innerHTML = `
             <h4>${state.stateName} - State Statistics</h4>
@@ -239,10 +426,7 @@ class HealthEquityMap {
         const statsContent = document.getElementById('stats-content');
         if (!statsContent) return;
         
-        const isPositive = this.isPositiveMeasure(measureName);
-        const valueDescription = isPositive ? 
-            (location.Data_Value >= quartiles.q3 ? 'High (Good)' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low (Bad)') :
-            (location.Data_Value >= quartiles.q3 ? 'High (Bad)' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low (Good)');
+        const valueDescription = location.Data_Value >= quartiles.q3 ? 'High' : location.Data_Value >= quartiles.q2 ? 'Medium-High' : location.Data_Value >= quartiles.q1 ? 'Medium-Low' : 'Low';
         
         statsContent.innerHTML = `
             <h4>${location.LocationName} - County Statistics</h4>
@@ -380,6 +564,58 @@ class HealthEquityMap {
             this.showLoading(false);
         }
     }
+
+    async loadSDOHMeasureData() {
+        if (!this.currentMeasure) return;
+        
+        this.showLoading(true);
+        
+        try {
+            console.log('Loading SDOH data for measure:', this.currentMeasure);
+            
+            // For now, SDOH data only supports county view (no state aggregation)
+            const apiEndpoint = `/api/sdoh-measure-data/${encodeURIComponent(this.currentMeasure)}`;
+            
+            const response = await fetch(apiEndpoint);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            this.currentData = await response.json();
+            
+            console.log('Received SDOH data:', this.currentData.length, 'records');
+            
+            if (this.currentData.length === 0) {
+                this.showError('No SDOH data available for the selected measure.');
+                return;
+            }
+            
+            // Check if we should render markers based on view mode and zoom level
+            const currentZoom = this.map.getZoom();
+            const shouldShowMarkers = this.isStateView || currentZoom >= this.minZoomForMarkers;
+            console.log('Current zoom level:', currentZoom, 'State view:', this.isStateView, 'Should show markers:', shouldShowMarkers);
+            
+            if (shouldShowMarkers) {
+                console.log('Rendering SDOH markers...');
+                this.renderMap();
+            } else {
+                console.log('Zoom level too low for county markers, not rendering');
+                this.markersVisible = false;
+            }
+            
+            this.updateStatsPanel();
+            this.updateLegendContent();
+            
+            console.log('Loaded SDOH data for measure:', this.currentMeasure, 'Records:', this.currentData.length);
+            
+        } catch (error) {
+            console.error('Error loading SDOH measure data:', error);
+            this.showError('Failed to load SDOH data for the selected measure.');
+        } finally {
+            this.showLoading(false);
+        }
+    }
     
     handleZoomChange() {
         const currentZoom = this.map.getZoom();
@@ -423,12 +659,12 @@ class HealthEquityMap {
             this.markersVisible = true;
         } else {
             // County view - check zoom level
-            const currentZoom = this.map.getZoom();
-            if (currentZoom < this.minZoomForMarkers) {
+        const currentZoom = this.map.getZoom();
+        if (currentZoom < this.minZoomForMarkers) {
                 console.log('Zoom level too low for county markers');
-                this.markersVisible = false;
+            this.markersVisible = false;
                 this.showZoomMessage();
-                return;
+            return;
             }
             console.log('Rendering county markers');
             this.renderCountyMarkers();
@@ -592,10 +828,7 @@ class HealthEquityMap {
         });
         
         // Create popup content for state
-        const isPositive = this.isPositiveMeasure(measureName);
-        const valueDescription = isPositive ? 
-            (value >= quartiles.q3 ? 'High (Good)' : value >= quartiles.q2 ? 'Medium-High' : value >= quartiles.q1 ? 'Medium-Low' : 'Low (Bad)') :
-            (value >= quartiles.q3 ? 'High (Bad)' : value >= quartiles.q2 ? 'Medium-High' : value >= quartiles.q1 ? 'Medium-Low' : 'Low (Good)');
+        const valueDescription = value >= quartiles.q3 ? 'High' : value >= quartiles.q2 ? 'Medium-High' : value >= quartiles.q1 ? 'Medium-Low' : 'Low';
         
         const popupContent = `
             <div style="min-width: 200px;">
@@ -706,45 +939,6 @@ class HealthEquityMap {
         return measuresHtml;
     }
     
-    isPositiveMeasure(measureName) {
-        if (!measureName) return true; // Default to positive if unknown
-        
-        const measureLower = measureName.toLowerCase();
-        
-        // Positive measures (higher is better)
-        const positiveKeywords = [
-            'screening', 'checkup', 'visit', 'control', 'medication', 'vaccination',
-            'preventive', 'mammography', 'cholesterol screening', 'cervical cancer screening',
-            'colorectal cancer screening', 'dental visit', 'routine checkup',
-            'core preventive services', 'up to date', 'flu shot', 'ppv shot'
-        ];
-        
-        // Negative measures (higher is worse)
-        const negativeKeywords = [
-            'cancer', 'disease', 'diabetes', 'asthma', 'copd', 'stroke', 'arthritis',
-            'obesity', 'smoking', 'drinking', 'binge drinking', 'high blood pressure',
-            'high cholesterol', 'chronic kidney disease', 'mental health not good',
-            'physical health not good', 'sleeping less', 'teeth lost', 'lack of health insurance',
-            'no leisure-time physical activity', 'physical inactivity'
-        ];
-        
-        // Check for negative keywords first (more specific)
-        for (const keyword of negativeKeywords) {
-            if (measureLower.includes(keyword)) {
-                return false;
-            }
-        }
-        
-        // Check for positive keywords
-        for (const keyword of positiveKeywords) {
-            if (measureLower.includes(keyword)) {
-                return true;
-            }
-        }
-        
-        // Default to positive if no clear indication
-        return true;
-    }
 
     getDataColor(value, quartiles, measureName = null) {
         if (value === null || value === undefined || isNaN(value)) return '#95a5a6';
@@ -763,8 +957,14 @@ class HealthEquityMap {
         // Normalize clamped value to 0-1 range within the outlier bounds
         const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
         
-        // Always use white (low) to dark red (high)
-        return this.getGradientColor(normalized, '#ffffff', '#8B0000');
+        // Use different color schemes based on data type
+        if (this.showSDOH) {
+            // SDOH data: white (low) to blue (high)
+            return this.getGradientColor(normalized, '#ffffff', '#0066cc');
+        } else {
+            // Health data: white (low) to dark red (high)
+            return this.getGradientColor(normalized, '#ffffff', '#8B0000');
+        }
     }
     
     getGradientColor(normalized, startColor, endColor) {
@@ -910,7 +1110,6 @@ class HealthEquityMap {
         const maxValue = upperBound;
         
         // Determine if this is a positive or negative measure
-        const isPositive = this.isPositiveMeasure(this.currentMeasure);
         
         statsContent.innerHTML = `
             <h4>Summary Statistics</h4>
