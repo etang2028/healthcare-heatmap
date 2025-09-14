@@ -129,6 +129,35 @@ def preprocess_places_data():
     
     print(f"Created {measure_count} individual measure files")
     
+    # Create state aggregate files
+    print("\nCreating state aggregate files...")
+    os.makedirs('data/state_measures', exist_ok=True)
+    
+    state_measure_count = 0
+    for measure in df['Measure_Clean'].unique():
+        measure_data = df[df['Measure_Clean'] == measure][
+            ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 
+             'Data_Value', 'Data_Value_Unit', 'Data_Value_Type',
+             'Low_Confidence_Limit', 'High_Confidence_Limit', 'Measure_Short']
+        ].copy()
+        
+        # Ensure TotalPopulation is numeric
+        measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+        
+        # Aggregate by state
+        state_aggregated = aggregate_data_by_state(measure_data)
+        
+        if len(state_aggregated) > 0:
+            # Create safe filename
+            safe_filename = create_safe_filename(measure)
+            state_aggregated.to_csv(f'data/state_measures/{safe_filename}', index=False)
+            state_measure_count += 1
+            
+            if state_measure_count % 10 == 0:
+                print(f"  Processed {state_measure_count} state measures...")
+    
+    print(f"Created {state_measure_count} state aggregate files")
+    
     return len(measures_df), len(locations)
 
 def create_short_measure_name(measure):
@@ -163,6 +192,79 @@ def create_short_measure_name(measure):
         key_terms = [word.title() for word in words if len(word) > 2]
     
     return ' - '.join(key_terms[:3]) if key_terms else measure[:50]
+
+def aggregate_data_by_state(measure_data):
+    """Aggregate data by state, calculating weighted averages"""
+    if len(measure_data) == 0:
+        return pd.DataFrame()
+    
+    # Group by state and calculate weighted averages manually
+    state_data = []
+    
+    for state_name, group in measure_data.groupby('StateDesc'):
+        # Calculate basic aggregations
+        avg_lat = group['lat'].mean()
+        avg_lng = group['lng'].mean()
+        total_pop = group['TotalPopulation'].sum()
+        location_count = len(group)
+        
+        # Calculate weighted average for Data_Value
+        valid_data = group.dropna(subset=['Data_Value', 'TotalPopulation'])
+        if len(valid_data) > 0:
+            weights = valid_data['TotalPopulation']
+            values = valid_data['Data_Value']
+            
+            if weights.sum() > 0:
+                weighted_avg = (values * weights).sum() / weights.sum()
+            else:
+                weighted_avg = values.mean()
+        else:
+            weighted_avg = np.nan
+        
+        # Get other fields from first row
+        first_row = group.iloc[0]
+        
+        state_data.append({
+            'StateDesc': state_name,
+            'lat': avg_lat,
+            'lng': avg_lng,
+            'TotalPopulation': total_pop,
+            'Data_Value': weighted_avg,
+            'Data_Value_Unit': first_row['Data_Value_Unit'],
+            'Data_Value_Type': first_row['Data_Value_Type'],
+            'Low_Confidence_Limit': group['Low_Confidence_Limit'].mean(),
+            'High_Confidence_Limit': group['High_Confidence_Limit'].mean(),
+            'Measure_Short': first_row['Measure_Short'],
+            'LocationCount': location_count,
+            'LocationName': state_name
+        })
+    
+    return pd.DataFrame(state_data)
+
+def calculate_weighted_average(data, value_col, weight_col):
+    """Calculate weighted average of values"""
+    if len(data) == 0:
+        return np.nan
+    
+    # Remove any NaN values
+    valid_data = data.dropna(subset=[value_col, weight_col])
+    if len(valid_data) == 0:
+        return np.nan
+    
+    # Calculate weighted average
+    weights = valid_data[weight_col]
+    values = valid_data[value_col]
+    
+    if weights.sum() == 0:
+        return values.mean()
+    
+    weighted_sum = (values * weights).sum()
+    total_weight = weights.sum()
+    
+    if total_weight > 0:
+        return weighted_sum / total_weight
+    else:
+        return values.mean()
 
 def create_safe_filename(measure):
     """Create a safe filename from measure name"""
@@ -211,6 +313,7 @@ def main():
     print("- data/locations_summary.csv")
     print("- data/available_measures.csv")
     print("- data/measures/*.csv (individual measure files)")
+    print("- data/state_measures/*.csv (state aggregate files)")
     print("- data/sdoh_cleaned.csv")
     print("\nYou can now use these smaller files for faster loading!")
 

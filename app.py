@@ -147,6 +147,41 @@ def get_measures():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/state-measure-data/<measure_name>')
+def get_state_measure_data(measure_name):
+    """API endpoint to get state aggregate data for a specific measure"""
+    try:
+        # Check if we have a preprocessed state file for this measure
+        safe_filename = create_safe_filename(measure_name)
+        state_measure_file = f'data/state_measures/{safe_filename}'
+        
+        if os.path.exists(state_measure_file):
+            # Load from preprocessed state file
+            state_data = pd.read_csv(state_measure_file)
+            # Ensure TotalPopulation is numeric (handle comma-separated values)
+            state_data['TotalPopulation'] = state_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+            print(f"Loaded {len(state_data)} state records from preprocessed file: {state_measure_file}")
+        else:
+            # Fallback: aggregate from city data
+            print(f"State file not found, aggregating from city data for measure: {measure_name}")
+            measure_data = get_measure_data(measure_name)
+            if len(measure_data) == 0:
+                return jsonify([])
+            
+            # Aggregate by state
+            state_data = aggregate_data_by_state(measure_data)
+            print(f"Aggregated {len(state_data)} state records from city data")
+        
+        # Convert to list of dictionaries for JSON response
+        state_data_list = state_data.to_dict('records')
+        print(f"Returning {len(state_data_list)} state data points for measure: {measure_name}")
+        
+        return jsonify(state_data_list)
+        
+    except Exception as e:
+        print(f"Error loading state data for measure {measure_name}: {str(e)}")
+        return jsonify([]), 500
+
 @app.route('/api/measure-data/<measure_name>')
 def get_measure_data(measure_name):
     """API endpoint to get data for a specific measure"""
@@ -197,6 +232,73 @@ def get_measure_data(measure_name):
     except Exception as e:
         print(f"Error loading measure data: {e}")
         return jsonify({"error": str(e)}), 500
+
+def aggregate_data_by_state(measure_data):
+    """Aggregate data by state, calculating weighted averages"""
+    if len(measure_data) == 0:
+        return pd.DataFrame()
+    
+    # Group by state and calculate weighted averages manually
+    state_data = []
+    
+    for state_name, group in measure_data.groupby('StateDesc'):
+        # Calculate basic aggregations
+        avg_lat = group['lat'].mean()
+        avg_lng = group['lng'].mean()
+        total_pop = group['TotalPopulation'].sum()
+        location_count = len(group)
+        
+        # Calculate weighted average for Data_Value
+        valid_data = group.dropna(subset=['Data_Value', 'TotalPopulation'])
+        if len(valid_data) > 0:
+            weights = valid_data['TotalPopulation']
+            values = valid_data['Data_Value']
+            
+            if weights.sum() > 0:
+                weighted_avg = (values * weights).sum() / weights.sum()
+            else:
+                weighted_avg = values.mean()
+        else:
+            weighted_avg = np.nan
+        
+        # Get other fields from first row
+        first_row = group.iloc[0]
+        
+        state_data.append({
+            'StateDesc': state_name,
+            'lat': avg_lat,
+            'lng': avg_lng,
+            'TotalPopulation': total_pop,
+            'Data_Value': weighted_avg,
+            'Data_Value_Unit': first_row['Data_Value_Unit'],
+            'Data_Value_Type': first_row['Data_Value_Type'],
+            'Low_Confidence_Limit': group['Low_Confidence_Limit'].mean(),
+            'High_Confidence_Limit': group['High_Confidence_Limit'].mean(),
+            'Measure_Short': first_row['Measure_Short'],
+            'LocationCount': location_count,
+            'LocationName': state_name
+        })
+    
+    return pd.DataFrame(state_data)
+
+def calculate_weighted_average(data, value_col, weight_col):
+    """Calculate weighted average of values"""
+    if len(data) == 0:
+        return np.nan
+    
+    # Remove any NaN values
+    valid_data = data.dropna(subset=[value_col, weight_col])
+    if len(valid_data) == 0:
+        return np.nan
+    
+    # Calculate weighted average
+    weights = valid_data[weight_col]
+    values = valid_data[value_col]
+    
+    if weights.sum() == 0:
+        return values.mean()
+    
+    return (values * weights).sum() / weights.sum()
 
 def create_safe_filename(measure):
     """Create a safe filename from measure name"""

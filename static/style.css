@@ -47,6 +47,118 @@ header h1 {
     font-weight: 500;
 }
 
+/* Toggle Switch Styles */
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-input {
+    display: none;
+}
+
+.toggle-slider {
+    position: relative;
+    width: 50px;
+    height: 24px;
+    background-color: #ccc;
+    border-radius: 24px;
+    transition: background-color 0.3s;
+}
+
+.toggle-slider:before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background-color: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.toggle-input:checked + .toggle-slider {
+    background-color: #4CAF50;
+}
+
+.toggle-input:checked + .toggle-slider:before {
+    transform: translateX(26px);
+}
+
+.toggle-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: white;
+}
+
+/* Measure Categories Styles */
+.measure-categories {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.category {
+    background: #f8f9fa;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border-left: 4px solid #3498db;
+}
+
+.category strong {
+    color: #2c3e50;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.category ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.category li {
+    margin-bottom: 0.25rem;
+}
+
+/* State Statistics Styles */
+.state-stats {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    border-left: 4px solid #3498db;
+}
+
+.stat-item {
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.stat-item:last-child {
+    margin-bottom: 0;
+}
+
+.state-context {
+    background: #e8f4fd;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+    border-left: 3px solid #3498db;
+}
+
+.state-context p {
+    margin: 0.25rem 0;
+    font-size: 0.85rem;
+    color: #555;
+}
+
 .controls select, .controls button {
     padding: 0.5rem 1rem;
     border: none;
