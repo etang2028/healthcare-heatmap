@@ -1043,65 +1043,159 @@ class HealthEquityMap {
         // Group data by state
         const stateGroups = {};
         
-        this.currentData.forEach(location => {
-            const state = location.StateDesc;
-            if (!stateGroups[state]) {
-                stateGroups[state] = {
-                    locations: [],
-                    totalPopulation: 0,
-                    values: []
-                };
-            }
-            
-            stateGroups[state].locations.push(location);
-            stateGroups[state].totalPopulation += location.TotalPopulation || 0;
-            stateGroups[state].values.push(location.Data_Value);
-        });
+        if (this.showOverlay) {
+            // Overlay mode: aggregate both health and SDOH data
+            this.currentData.forEach(location => {
+                const state = location.StateDesc;
+                if (!stateGroups[state]) {
+                    stateGroups[state] = {
+                        locations: [],
+                        totalPopulation: 0,
+                        healthValues: [],
+                        sdohValues: []
+                    };
+                }
+                
+                stateGroups[state].locations.push(location);
+                stateGroups[state].totalPopulation += location.TotalPopulation || 0;
+                stateGroups[state].healthValues.push(location.Data_Value);
+                
+                // Find matching SDOH data
+                const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
+                if (matchingSDOH && matchingSDOH.Data_Value !== null && matchingSDOH.Data_Value !== undefined) {
+                    stateGroups[state].sdohValues.push(matchingSDOH.Data_Value);
+                }
+            });
+        } else {
+            // Regular mode: aggregate single dataset
+            this.currentData.forEach(location => {
+                const state = location.StateDesc;
+                if (!stateGroups[state]) {
+                    stateGroups[state] = {
+                        locations: [],
+                        totalPopulation: 0,
+                        values: []
+                    };
+                }
+                
+                stateGroups[state].locations.push(location);
+                stateGroups[state].totalPopulation += location.TotalPopulation || 0;
+                stateGroups[state].values.push(location.Data_Value);
+            });
+        }
         
         // Calculate aggregated values for each state
         const stateData = [];
         
         Object.keys(stateGroups).forEach(stateName => {
             const group = stateGroups[stateName];
-            const validValues = group.values.filter(v => !isNaN(v));
             
-            if (validValues.length === 0) return;
-            
-            // Calculate weighted average (by population) or simple average
-            let avgValue;
-            if (group.totalPopulation > 0) {
-                // Weighted average by population
-                let weightedSum = 0;
-                let totalWeight = 0;
+            if (this.showOverlay) {
+                // Overlay mode: calculate both health and SDOH averages
+                const validHealthValues = group.healthValues.filter(v => !isNaN(v));
+                const validSdohValues = group.sdohValues.filter(v => !isNaN(v));
                 
-                group.locations.forEach(location => {
-                    if (!isNaN(location.Data_Value)) {
-                        const weight = location.TotalPopulation || 1;
-                        weightedSum += location.Data_Value * weight;
-                        totalWeight += weight;
+                if (validHealthValues.length === 0) return;
+                
+                // Calculate weighted averages for both datasets
+                let healthAvgValue, sdohAvgValue;
+                
+                if (group.totalPopulation > 0) {
+                    // Health data weighted average
+                    let healthWeightedSum = 0;
+                    let healthTotalWeight = 0;
+                    
+                    group.locations.forEach((location, index) => {
+                        if (!isNaN(location.Data_Value)) {
+                            const weight = location.TotalPopulation || 1;
+                            healthWeightedSum += location.Data_Value * weight;
+                            healthTotalWeight += weight;
+                        }
+                    });
+                    
+                    healthAvgValue = healthTotalWeight > 0 ? healthWeightedSum / healthTotalWeight : validHealthValues.reduce((a, b) => a + b, 0) / validHealthValues.length;
+                    
+                    // SDOH data weighted average
+                    if (validSdohValues.length > 0) {
+                        let sdohWeightedSum = 0;
+                        let sdohTotalWeight = 0;
+                        
+                        group.locations.forEach((location, index) => {
+                            if (index < group.sdohValues.length && !isNaN(group.sdohValues[index])) {
+                                const weight = location.TotalPopulation || 1;
+                                sdohWeightedSum += group.sdohValues[index] * weight;
+                                sdohTotalWeight += weight;
+                            }
+                        });
+                        
+                        sdohAvgValue = sdohTotalWeight > 0 ? sdohWeightedSum / sdohTotalWeight : validSdohValues.reduce((a, b) => a + b, 0) / validSdohValues.length;
+                    } else {
+                        sdohAvgValue = null;
                     }
-                });
+                } else {
+                    // Simple averages
+                    healthAvgValue = validHealthValues.reduce((a, b) => a + b, 0) / validHealthValues.length;
+                    sdohAvgValue = validSdohValues.length > 0 ? validSdohValues.reduce((a, b) => a + b, 0) / validSdohValues.length : null;
+                }
                 
-                avgValue = totalWeight > 0 ? weightedSum / totalWeight : validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                // Calculate state center coordinates
+                const avgLat = group.locations.reduce((sum, loc) => sum + loc.lat, 0) / group.locations.length;
+                const avgLng = group.locations.reduce((sum, loc) => sum + loc.lng, 0) / group.locations.length;
+                
+                stateData.push({
+                    stateName: stateName,
+                    avgValue: healthAvgValue, // Use health as primary for compatibility
+                    sdohAvgValue: sdohAvgValue,
+                    totalPopulation: group.totalPopulation,
+                    locationCount: group.locations.length,
+                    lat: avgLat,
+                    lng: avgLng,
+                    minValue: Math.min(...validHealthValues),
+                    maxValue: Math.max(...validHealthValues),
+                    isOverlay: true
+                });
             } else {
-                // Simple average
-                avgValue = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                // Regular mode: calculate single dataset average
+                const validValues = group.values.filter(v => !isNaN(v));
+                
+                if (validValues.length === 0) return;
+                
+                let avgValue;
+                if (group.totalPopulation > 0) {
+                    // Weighted average by population
+                    let weightedSum = 0;
+                    let totalWeight = 0;
+                    
+                    group.locations.forEach(location => {
+                        if (!isNaN(location.Data_Value)) {
+                            const weight = location.TotalPopulation || 1;
+                            weightedSum += location.Data_Value * weight;
+                            totalWeight += weight;
+                        }
+                    });
+                    
+                    avgValue = totalWeight > 0 ? weightedSum / totalWeight : validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                } else {
+                    // Simple average
+                    avgValue = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                }
+                
+                // Calculate state center coordinates
+                const avgLat = group.locations.reduce((sum, loc) => sum + loc.lat, 0) / group.locations.length;
+                const avgLng = group.locations.reduce((sum, loc) => sum + loc.lng, 0) / group.locations.length;
+                
+                stateData.push({
+                    stateName: stateName,
+                    avgValue: avgValue,
+                    totalPopulation: group.totalPopulation,
+                    locationCount: group.locations.length,
+                    lat: avgLat,
+                    lng: avgLng,
+                    minValue: Math.min(...validValues),
+                    maxValue: Math.max(...validValues),
+                    isOverlay: false
+                });
             }
-            
-            // Calculate state center coordinates (average of all locations)
-            const avgLat = group.locations.reduce((sum, loc) => sum + loc.lat, 0) / group.locations.length;
-            const avgLng = group.locations.reduce((sum, loc) => sum + loc.lng, 0) / group.locations.length;
-            
-            stateData.push({
-                stateName: stateName,
-                avgValue: avgValue,
-                totalPopulation: group.totalPopulation,
-                locationCount: group.locations.length,
-                lat: avgLat,
-                lng: avgLng,
-                minValue: Math.min(...validValues),
-                maxValue: Math.max(...validValues)
-            });
         });
         
         return stateData;
@@ -1109,34 +1203,80 @@ class HealthEquityMap {
     
     createStateMarker(state, quartiles, measureName) {
         const value = state.avgValue;
-        const color = this.getDataColor(value, quartiles, measureName, state);
         const radius = this.getStateMarkerRadius(state.totalPopulation);
         
-        const marker = L.circleMarker([state.lat, state.lng], {
-            radius: radius,
-            fillColor: color,
-            color: 'white',
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 0.8
-        });
+        let marker;
+        
+        if (this.showOverlay && state.isOverlay && state.sdohAvgValue !== null) {
+            // Overlay mode: create split state marker
+            const healthValues = this.overlayHealthData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            const sdohValues = this.overlaySDOHData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            
+            const healthQuartiles = this.calculateQuartiles(healthValues);
+            const sdohQuartiles = this.calculateQuartiles(sdohValues);
+            
+            marker = this.createSplitMarker(state, healthQuartiles, sdohQuartiles, value, state.sdohAvgValue, radius);
+        } else {
+            // Regular mode: create normal state marker
+            const color = this.getDataColor(value, quartiles, measureName, state);
+            marker = L.circleMarker([state.lat, state.lng], {
+                radius: radius,
+                fillColor: color,
+                color: 'white',
+                weight: 3,
+                opacity: 1,
+                fillOpacity: 0.8
+            });
+        }
         
         // Create popup content for state
         const valueClassification = this.getValueClassification(value, quartiles);
         
-        const popupContent = `
-            <div style="min-width: 200px;">
-                <h4>${state.stateName}</h4>
-                <p><strong>Average Value:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
-                <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
-                <p><strong>Locations:</strong> ${state.locationCount}</p>
-                <p><strong>Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
-                <hr style="margin: 0.5rem 0;">
-                <p style="font-size: 0.8rem; color: #666; margin: 0;">
-                    <em>State-level aggregation</em>
-                </p>
-            </div>
-        `;
+        let popupContent;
+        
+        if (this.showOverlay && state.isOverlay && state.sdohAvgValue !== null) {
+            // Overlay mode: show both health and SDOH data
+            const sdohValues = this.overlaySDOHData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            const sdohQuartiles = this.calculateQuartiles(sdohValues);
+            const sdohClassification = this.getValueClassification(state.sdohAvgValue, sdohQuartiles);
+            
+            popupContent = `
+                <div style="min-width: 200px;">
+                    <h4>${state.stateName}</h4>
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <div style="width: 20px; height: 20px; border-radius: 50%; position: relative; border: 2px solid white; margin-right: 10px; overflow: hidden;">
+                            <div style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background-color: ${this.calculateHealthColor(value, quartiles)};"></div>
+                            <div style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; background-color: ${this.calculateSDOHColor(state.sdohAvgValue, sdohQuartiles)};"></div>
+                        </div>
+                        <span style="font-size: 0.9rem; color: #666;">Split marker: Health (left) | SDOH (right)</span>
+                    </div>
+                    <p><strong>Health Average:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
+                    <p><strong>SDOH Average:</strong> ${state.sdohAvgValue.toFixed(1)}% <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
+                    <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
+                    <p><strong>Locations:</strong> ${state.locationCount}</p>
+                    <p><strong>Health Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
+                    <hr style="margin: 0.5rem 0;">
+                    <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                        <em>State-level aggregation (overlay)</em>
+                    </p>
+                </div>
+            `;
+        } else {
+            // Regular mode: show single dataset
+            popupContent = `
+                <div style="min-width: 200px;">
+                    <h4>${state.stateName}</h4>
+                    <p><strong>Average Value:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
+                    <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
+                    <p><strong>Locations:</strong> ${state.locationCount}</p>
+                    <p><strong>Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
+                    <hr style="margin: 0.5rem 0;">
+                    <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                        <em>State-level aggregation</em>
+                    </p>
+                </div>
+            `;
+        }
         
         marker.bindPopup(popupContent);
         
@@ -1230,7 +1370,12 @@ class HealthEquityMap {
         if (this.showOverlay) {
             // Overlay mode: show both health and SDOH data
             const matchingSDOH = this.findMatchingData(this.overlayHealthData, this.overlaySDOHData, location);
-            const sdohClassification = matchingSDOH ? this.getValueClassification(matchingSDOH.Data_Value, quartiles) : 'Unknown';
+            
+            // Calculate SDOH quartiles for proper color calculation
+            const sdohValues = this.overlaySDOHData.map(d => d.Data_Value).filter(v => !isNaN(v));
+            const sdohQuartiles = this.calculateQuartiles(sdohValues);
+            
+            const sdohClassification = matchingSDOH ? this.getValueClassification(matchingSDOH.Data_Value, sdohQuartiles) : 'Unknown';
             
             popupContent = `
                 <div class="popup-content">
@@ -1238,7 +1383,10 @@ class HealthEquityMap {
                     <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
                     <hr style="margin: 0.5rem 0;">
                     <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
-                        <div style="width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(to right, ${this.calculateHealthColor(value, quartiles)} 50%, ${matchingSDOH ? this.calculateSDOHColor(matchingSDOH.Data_Value, quartiles) : '#ccc'} 50%); border: 2px solid white; margin-right: 10px;"></div>
+                        <div style="width: 20px; height: 20px; border-radius: 50%; position: relative; border: 2px solid white; margin-right: 10px; overflow: hidden;">
+                            <div style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background-color: ${this.calculateHealthColor(value, quartiles)};"></div>
+                            <div style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; background-color: ${matchingSDOH ? this.calculateSDOHColor(matchingSDOH.Data_Value, sdohQuartiles) : '#ccc'};"></div>
+                        </div>
                         <span style="font-size: 0.9rem; color: #666;">Split marker: Health (left) | SDOH (right)</span>
                     </div>
                     <h5>Health Data (${this.currentHealthMeasure}):</h5>

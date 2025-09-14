@@ -584,3 +584,38 @@ header h1 {
 .split-marker div {
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
+
+/* Data credits footer */
+.data-credits {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(44, 62, 80, 0.95);
+    color: #ecf0f1;
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    text-align: center;
+    z-index: 1000;
+    border-top: 1px solid #34495e;
+}
+
+.data-credits p {
+    margin: 0;
+    padding: 0;
+}
+
+.data-credits a {
+    color: #3498db;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.data-credits a:hover {
+    color: #5dade2;
+    text-decoration: underline;
+}
+
+.data-credits a:visited {
+    color: #8e44ad;
+}
