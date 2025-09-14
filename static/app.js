@@ -12,6 +12,7 @@ class HealthEquityMap {
         this.overlaySDOHData = [];
         this.currentHealthMeasure = null;
         this.currentSDOHMeasure = null;
+        this.overlaySDOHMeasure = null; // Track SDOH measure in overlay mode
         this.minZoomForMarkers = 4; // Minimum zoom level to show markers
         this.markersVisible = false;
         this.isStateView = false; // Toggle between state and county view
@@ -136,7 +137,7 @@ class HealthEquityMap {
                     <strong>Health Measure:</strong> ${this.currentHealthMeasure ? this.currentHealthMeasure.substring(0, 40) + '...' : 'None selected'}
                 </p>
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
-                    <strong>SDOH Measure:</strong> ${this.currentSDOHMeasure ? this.currentSDOHMeasure.substring(0, 40) + '...' : 'None selected'}
+                    <strong>SDOH Measure:</strong> ${this.overlaySDOHMeasure ? this.overlaySDOHMeasure.substring(0, 40) + '...' : 'None selected'}
                 </p>
                 <hr style="margin: 0.5rem 0;">
                 <p style="font-size: 0.8rem; margin: 0.25rem 0; color: #666;">
@@ -323,6 +324,7 @@ class HealthEquityMap {
                     if (this.showOverlay) {
                         // In overlay mode, set SDOH measure and load if both are selected
                         this.currentSDOHMeasure = value;
+                        this.overlaySDOHMeasure = value; // Track SDOH measure for overlay mode
                         if (this.currentHealthMeasure && this.currentSDOHMeasure) {
                             this.loadOverlayData();
                         } else {
@@ -472,6 +474,7 @@ class HealthEquityMap {
         this.currentMeasure = null;
         this.currentHealthMeasure = null;
         this.currentSDOHMeasure = null;
+        this.overlaySDOHMeasure = null;
         this.overlayHealthData = [];
         this.overlaySDOHData = [];
         document.getElementById('measure-select').value = '';
@@ -491,38 +494,91 @@ class HealthEquityMap {
         
         const valueClassification = this.getValueClassification(state.avgValue, quartiles);
         
-        statsContent.innerHTML = `
-            <h4>${state.stateName} - State Statistics</h4>
-            <p><strong>Selected Measure:</strong> ${measureName.length > 60 ? measureName.substring(0, 60) + '...' : measureName}</p>
+        if (this.showOverlay) {
+            // Overlay mode: show both health and SDOH data
+            const sdohClassification = state.sdohAvgValue !== null ? this.getValueClassification(state.sdohAvgValue, quartiles) : 'Unknown';
             
-            <h5>State-Level Data:</h5>
-            <div class="state-stats">
-                <div class="stat-item">
-                    <strong>Average Value:</strong> ${state.avgValue.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>
+            statsContent.innerHTML = `
+                <h4>${state.stateName} - State Statistics (Overlay)</h4>
+                <p><strong>Health Measure:</strong> ${this.currentHealthMeasure.length > 60 ? this.currentHealthMeasure.substring(0, 60) + '...' : this.currentHealthMeasure}</p>
+                <p><strong>SDOH Measure:</strong> ${this.overlaySDOHMeasure ? (this.overlaySDOHMeasure.length > 60 ? this.overlaySDOHMeasure.substring(0, 60) + '...' : this.overlaySDOHMeasure) : 'None selected'}</p>
+                
+                <h5>Health Data:</h5>
+                <div class="state-stats">
+                    <div class="stat-item">
+                        <strong>Average Value:</strong> ${state.avgValue.toFixed(1)} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>
+                    </div>
+                    <div class="stat-item">
+                        <strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}
+                
+                ${state.sdohAvgValue !== null ? `
+                    <h5>SDOH Data:</h5>
+                    <div class="state-stats" style="background: #f0f8ff; border-left: 4px solid #8B0080;">
+                        <div class="stat-item">
+                            <strong>Average Value:</strong> ${this.formatSDOHValue(state.sdohAvgValue, '', '')} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span>
+                        </div>
+                        <div class="stat-item">
+                            <strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}
+                        </div>
+                    </div>
+                ` : `
+                    <h5>SDOH Data: (${this.overlaySDOHMeasure || 'None selected'}):</h5>
+                    <div class="state-stats" style="background: #f8f8f8; border-left: 4px solid #ccc;">
+                        <div class="stat-item">
+                            <strong>Status:</strong> <span style="color: #666; font-style: italic;">No matching SDOH data available</span>
+                        </div>
+                    </div>
+                `}
+                
+                <h5>State Context:</h5>
+                <div class="state-context">
+                    <p><strong>Data Type:</strong> Population-weighted average across ${state.locationCount} locations</p>
+                    <p><strong>Coverage:</strong> ${((state.locationCount / 28) * 100).toFixed(0)}% of expected locations</p>
+                    <p><strong>Reliability:</strong> ${state.locationCount >= 20 ? 'High' : state.locationCount >= 10 ? 'Medium' : 'Low'} (based on location count)</p>
                 </div>
-                <div class="stat-item">
-                    <strong>Number of Locations:</strong> ${state.locationCount}
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                    <em>Click on other state markers to view their statistics</em>
+                </p>
+            `;
+        } else {
+            // Regular mode: show single dataset
+            statsContent.innerHTML = `
+                <h4>${state.stateName} - State Statistics</h4>
+                <p><strong>Selected Measure:</strong> ${measureName.length > 60 ? measureName.substring(0, 60) + '...' : measureName}</p>
+                
+                <h5>State-Level Data:</h5>
+                <div class="state-stats">
+                    <div class="stat-item">
+                        <strong>Average Value:</strong> ${(() => {
+                            if (this.showSDOH) {
+                                return this.formatSDOHValue(state.avgValue, measureName);
+                            } else {
+                                return `${state.avgValue.toFixed(1)}`;
+                            }
+                        })()} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>
+                    </div>
+                    <div class="stat-item">
+                        <strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <strong>Value Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%
+                
+                <h5>State Context:</h5>
+                <div class="state-context">
+                    <p><strong>Data Type:</strong> Population-weighted average across ${state.locationCount} locations</p>
+                    <p><strong>Coverage:</strong> ${((state.locationCount / 28) * 100).toFixed(0)}% of expected locations</p>
+                    <p><strong>Reliability:</strong> ${state.locationCount >= 20 ? 'High' : state.locationCount >= 10 ? 'Medium' : 'Low'} (based on location count)</p>
                 </div>
-            </div>
-            
-            <h5>State Context:</h5>
-            <div class="state-context">
-                <p><strong>Data Type:</strong> Population-weighted average across ${state.locationCount} locations</p>
-                <p><strong>Coverage:</strong> ${((state.locationCount / 28) * 100).toFixed(0)}% of expected locations</p>
-                <p><strong>Reliability:</strong> ${state.locationCount >= 20 ? 'High' : state.locationCount >= 10 ? 'Medium' : 'Low'} (based on location count)</p>
-            </div>
-            
-            <hr style="margin: 1rem 0;">
-            <p style="font-size: 0.8rem; color: #666; margin: 0;">
-                <em>Click on other state markers to view their statistics</em>
-            </p>
-        `;
+                
+                <hr style="margin: 1rem 0;">
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">
+                    <em>Click on other state markers to view their statistics</em>
+                </p>
+            `;
+        }
     }
     
     updateCountyStatsPanel(location, measureName, quartiles) {
@@ -539,12 +595,13 @@ class HealthEquityMap {
             statsContent.innerHTML = `
                 <h4>${location.LocationName} - County Statistics (Overlay)</h4>
                 <p><strong>Health Measure:</strong> ${this.currentHealthMeasure.length > 60 ? this.currentHealthMeasure.substring(0, 60) + '...' : this.currentHealthMeasure}</p>
-                <p><strong>SDOH Measure:</strong> ${this.currentSDOHMeasure.length > 60 ? this.currentSDOHMeasure.substring(0, 60) + '...' : this.currentSDOHMeasure}</p>
-            
+                <p><strong>SDOH Measure:</strong> ${this.overlaySDOHMeasure ? (this.overlaySDOHMeasure.length > 60 ? this.overlaySDOHMeasure.substring(0, 60) + '...' : this.overlaySDOHMeasure) : 'None selected'}</p>
+
+                <h5>Health Data:</h5>
                 <div class="state-stats">
                     <div class="stat-item">
                         <strong>Value:</strong> ${(() => {
-                            let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
+                            let valueDisplay = `${location.Data_Value.toFixed(1)}`; // Health data is always percentage
                             if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
                                 const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
                                 valueDisplay += ` ± ${margin}%`;
@@ -561,20 +618,20 @@ class HealthEquityMap {
                 </div>
                 
                 ${matchingSDOH ? `
-                    <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
+                    <h5>SDOH Data:</h5>
                     <div class="state-stats" style="background: #f0f8ff; border-left: 4px solid #8B0080;">
                         <div class="stat-item">
-                            <strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span>
+                            <strong>Value:</strong> ${matchingSDOH.Data_Value ? this.formatSDOHValue(matchingSDOH.Data_Value, '', matchingSDOH.Data_Value_Unit) : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span>
                         </div>
                         <div class="stat-item">
                             <strong>Population:</strong> ${(matchingSDOH.TotalPopulation || 0).toLocaleString()}
                         </div>
                         <div class="stat-item">
-                            <strong>Data Type:</strong> ${matchingSDOH.Data_Value_Type || 'survey data'}
-                        </div>
+                        <strong>State:</strong> ${location.StateDesc}
+                    </div>
                     </div>
                 ` : `
-                    <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
+                    <h5>SDOH Data:</h5>
                     <div class="state-stats" style="background: #f8f8f8; border-left: 4px solid #ccc;">
                         <div class="stat-item">
                             <strong>Status:</strong> <span style="color: #666; font-style: italic;">No matching SDOH data available</span>
@@ -604,10 +661,18 @@ class HealthEquityMap {
                 <div class="state-stats">
                     <div class="stat-item">
                         <strong>Value:</strong> ${(() => {
-                            let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
+                            let valueDisplay;
+                            if (this.showSDOH) {
+                                // SDOH mode: use proper formatting based on measure type
+                                valueDisplay = this.formatSDOHValue(location.Data_Value, measureName, location.Data_Value_Unit);
+                            } else {
+                                // Health mode: use existing logic
+                                valueDisplay = `${location.Data_Value.toFixed(1)}`;
+                            }
+                            
                             if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
                                 const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
-                                valueDisplay += ` ± ${margin}%`;
+                                valueDisplay += `% ± ${margin}`;
                             }
                             return valueDisplay + ` <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span>`;
                         })()}
@@ -648,7 +713,7 @@ class HealthEquityMap {
                 <div class="state-context" style="background: #e8f4fd; border-left: 4px solid #8B0080;">
                     <h5>Current Selection:</h5>
                     <p><strong>Health Measure:</strong> ${this.currentHealthMeasure || 'None selected'}</p>
-                    <p><strong>SDOH Measure:</strong> ${this.currentSDOHMeasure || 'None selected'}</p>
+                    <p><strong>SDOH Measure:</strong> ${this.overlaySDOHMeasure || 'None selected'}</p>
                 </div>
                 
                 <h5>How Overlay Works:</h5>
@@ -666,7 +731,6 @@ class HealthEquityMap {
                         <ul>
                             <li>Data matched by county name and state</li>
                             <li>Shows "No matching data" when unavailable</li>
-                            <li>Purple gradient indicates overlay mode</li>
                         </ul>
                     </div>
                 </div>
@@ -1251,10 +1315,9 @@ class HealthEquityMap {
                         <span style="font-size: 0.9rem; color: #666;">Split marker: Health (left) | SDOH (right)</span>
                     </div>
                     <p><strong>Health Average:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
-                    <p><strong>SDOH Average:</strong> ${state.sdohAvgValue.toFixed(1)}% <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
+                    <p><strong>SDOH Average:</strong> ${state.sdohAvgValue.toFixed(1)} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
                     <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
                     <p><strong>Locations:</strong> ${state.locationCount}</p>
-                    <p><strong>Health Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
                     <hr style="margin: 0.5rem 0;">
                     <p style="font-size: 0.8rem; color: #666; margin: 0;">
                         <em>State-level aggregation (overlay)</em>
@@ -1266,10 +1329,9 @@ class HealthEquityMap {
             popupContent = `
                 <div style="min-width: 200px;">
                     <h4>${state.stateName}</h4>
-                    <p><strong>Average Value:</strong> ${value.toFixed(1)}% <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
+                    <p><strong>Average Value:</strong> ${value.toFixed(1)} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
                     <p><strong>Total Population:</strong> ${state.totalPopulation.toLocaleString()}</p>
                     <p><strong>Locations:</strong> ${state.locationCount}</p>
-                    <p><strong>Range:</strong> ${state.minValue.toFixed(1)}% - ${state.maxValue.toFixed(1)}%</p>
                     <hr style="margin: 0.5rem 0;">
                     <p style="font-size: 0.8rem; color: #666; margin: 0;">
                         <em>State-level aggregation</em>
@@ -1356,12 +1418,19 @@ class HealthEquityMap {
         }
         
         // Create popup content
-        let valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
+        let valueDisplay;
+        if (this.showSDOH) {
+            // SDOH mode: use proper formatting based on measure type
+            valueDisplay = this.formatSDOHValue(value, this.currentMeasure, location.Data_Value_Unit);
+        } else {
+            // Health mode: use existing logic
+            valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
+        }
         
         // Add confidence interval as plus-minus if available
         if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
             const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
-            valueDisplay += ` ± ${margin}`;
+            valueDisplay += `% ± ${margin}`;
         }
         
         let popupContent;
@@ -1393,8 +1462,8 @@ class HealthEquityMap {
                     <p><strong>Value:</strong> ${valueDisplay} <span style="color: ${this.getClassificationColor(valueClassification)}; font-weight: bold;">(${valueClassification})</span></p>
                     ${matchingSDOH ? `
                         <hr style="margin: 0.5rem 0;">
-                        <h5>SDOH Data (${this.currentSDOHMeasure}):</h5>
-                        <p><strong>Value:</strong> ${matchingSDOH.Data_Value ? matchingSDOH.Data_Value.toFixed(1) + (matchingSDOH.Data_Value_Unit || '') : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
+                        <h5>SDOH Data (${this.overlaySDOHMeasure || 'None selected'}):</h5>
+                        <p><strong>Value:</strong> ${matchingSDOH.Data_Value ? this.formatSDOHValue(matchingSDOH.Data_Value, this.currentSDOHMeasure, matchingSDOH.Data_Value_Unit) : 'N/A'} <span style="color: ${this.getClassificationColor(sdohClassification)}; font-weight: bold;">(${sdohClassification})</span></p>
                     ` : `
                         <p style="color: #666; font-style: italic;">No matching SDOH data available</p>
                     `}
@@ -1465,6 +1534,16 @@ class HealthEquityMap {
             case 'Low': return '#28a745'; // Green
             default: return '#6c757d'; // Gray
         }
+    }
+
+    isPercentageMeasure(measureName) {
+        // Check if the measure name starts with "Percentage"
+        return measureName && measureName.toLowerCase().startsWith('percentage');
+    }
+
+    formatSDOHValue(value, measureName, unit = '') {
+        // Never add % sign for SDOH data - just use the value and any existing unit
+        return `${value.toFixed(1)}${unit || ''}`;
     }
 
     createSplitMarker(location, healthQuartiles, sdohQuartiles, healthValue, sdohValue, radius) {
@@ -1710,7 +1789,7 @@ class HealthEquityMap {
         let valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
         if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
             const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
-            valueDisplay += ` ± ${margin}`;
+            valueDisplay += `% ± ${margin}`;
         }
         
         statsContent.innerHTML = `
@@ -1807,7 +1886,6 @@ class HealthEquityMap {
             <p><strong>Selected Measure:</strong> ${this.currentMeasure.length > 60 ? this.currentMeasure.substring(0, 60) + '...' : this.currentMeasure}</p>
             <p><strong>Total Locations:</strong> ${this.currentData.length}</p>
             <p><strong>Average Value:</strong> ${avgValue.toFixed(1)}</p>
-            <p><strong>Range:</strong> ${minValue.toFixed(1)} - ${maxValue.toFixed(1)}</p>
             <p><strong>Total Population:</strong> ${totalPopulation.toLocaleString()}</p>
             
             
