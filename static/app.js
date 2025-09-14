@@ -6,7 +6,7 @@ class HealthEquityMap {
         this.markers = [];
         this.showSDOH = false;
         this.availableMeasures = [];
-        this.minZoomForMarkers = 7; // Minimum zoom level to show markers
+        this.minZoomForMarkers = 4; // Minimum zoom level to show markers
         this.markersVisible = false;
         this.isStateView = false; // Toggle between state and county view
         
@@ -48,7 +48,7 @@ class HealthEquityMap {
                 <h4>Data Value Legend</h4>
                 <div class="legend-gradient" style="
                     height: 20px; 
-                    background: linear-gradient(to right, #e74c3c, #3498db); 
+                    background: linear-gradient(to right, #ffffff, #8B0000); 
                     border-radius: 4px; 
                     margin: 0.5rem 0;
                     border: 1px solid #ddd;
@@ -71,12 +71,11 @@ class HealthEquityMap {
     updateLegendContent() {
         if (!this.legendDiv) return;
         
-        const isPositive = this.isPositiveMeasure(this.currentMeasure);
-        const measureType = isPositive ? 'Positive' : 'Negative';
-        const lowColor = isPositive ? '#e74c3c' : '#3498db';
-        const highColor = isPositive ? '#3498db' : '#e74c3c';
-        const lowDescription = isPositive ? 'Low (Bad)' : 'Low (Good)';
-        const highDescription = isPositive ? 'High (Good)' : 'High (Bad)';
+        const measureType = this.isPositiveMeasure(this.currentMeasure) ? 'Positive' : 'Negative';
+        const lowColor = '#ffffff';
+        const highColor = '#8B0000';
+        const lowDescription = 'Low';
+        const highDescription = 'High';
         const viewType = this.isStateView ? 'State-level aggregation' : 'County-level data';
         
         this.legendDiv.innerHTML = `
@@ -252,7 +251,14 @@ class HealthEquityMap {
             <h5>County-Level Data:</h5>
             <div class="state-stats">
                 <div class="stat-item">
-                    <strong>Value:</strong> ${location.Data_Value.toFixed(1)}% ${valueDescription}
+                    <strong>Value:</strong> ${(() => {
+                        let valueDisplay = `${location.Data_Value.toFixed(1)}%`;
+                        if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
+                            const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
+                            valueDisplay += ` ± ${margin}%`;
+                        }
+                        return valueDisplay + ` ${valueDescription}`;
+                    })()}
                 </div>
                 <div class="stat-item">
                     <strong>Population:</strong> ${(location.TotalPopulation || 0).toLocaleString()}
@@ -260,12 +266,6 @@ class HealthEquityMap {
                 <div class="stat-item">
                     <strong>State:</strong> ${location.StateDesc}
                 </div>
-                <div class="stat-item">
-                    <strong>Data Type:</strong> ${location.Data_Value_Type || 'N/A'}
-                </div>
-                ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 
-                    `<div class="stat-item"><strong>Confidence Interval:</strong> ${location.Low_Confidence_Limit.toFixed(1)}% - ${location.High_Confidence_Limit.toFixed(1)}%</div>` : ''
-                }
             </div>
             
             <h5>Location Context:</h5>
@@ -656,16 +656,20 @@ class HealthEquityMap {
         });
         
         // Create popup content
+        let valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
+        
+        // Add confidence interval as plus-minus if available
+        if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
+            const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
+            valueDisplay += ` ± ${margin}`;
+        }
+        
         const popupContent = `
             <div class="popup-content">
                 <h4>${location.LocationName || 'Unknown Location'}</h4>
                 <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
-                <p><strong>Value:</strong> ${value.toFixed(1)}${location.Data_Value_Unit || ''}</p>
+                <p><strong>Value:</strong> ${valueDisplay}</p>
                 <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
-                <p><strong>Type:</strong> ${location.Data_Value_Type || 'N/A'}</p>
-                ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 
-                    `<p><strong>Confidence Interval:</strong> ${location.Low_Confidence_Limit.toFixed(1)} - ${location.High_Confidence_Limit.toFixed(1)}</p>` : ''
-                }
             </div>
         `;
         
@@ -745,20 +749,22 @@ class HealthEquityMap {
     getDataColor(value, quartiles, measureName = null) {
         if (value === null || value === undefined || isNaN(value)) return '#95a5a6';
         
-        const isPositive = this.isPositiveMeasure(measureName);
-        const min = quartiles.min;
-        const max = quartiles.max;
+        const q1 = quartiles.q1;
+        const q3 = quartiles.q3;
+        const iqr = q3 - q1;
         
-        // Normalize value to 0-1 range
-        const normalized = (value - min) / (max - min);
+        // Calculate outlier bounds using 1.5 IQR rule
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
         
-        if (isPositive) {
-            // For positive measures: red (low) to blue (high)
-            return this.getGradientColor(normalized, '#e74c3c', '#3498db');
-        } else {
-            // For negative measures: blue (low) to red (high)
-            return this.getGradientColor(normalized, '#3498db', '#e74c3c');
-        }
+        // Clamp value to outlier bounds
+        const clampedValue = Math.max(lowerBound, Math.min(upperBound, value));
+        
+        // Normalize clamped value to 0-1 range within the outlier bounds
+        const normalized = (clampedValue - lowerBound) / (upperBound - lowerBound);
+        
+        // Always use white (low) to dark red (high)
+        return this.getGradientColor(normalized, '#ffffff', '#8B0000');
     }
     
     getGradientColor(normalized, startColor, endColor) {
@@ -809,16 +815,19 @@ class HealthEquityMap {
         const statsContent = document.getElementById('stats-content');
         const value = location.Data_Value;
         
+        // Format value with confidence interval as plus-minus if available
+        let valueDisplay = `${value.toFixed(1)}${location.Data_Value_Unit || ''}`;
+        if (location.Low_Confidence_Limit && location.High_Confidence_Limit) {
+            const margin = ((location.High_Confidence_Limit - location.Low_Confidence_Limit) / 2).toFixed(1);
+            valueDisplay += ` ± ${margin}`;
+        }
+        
         statsContent.innerHTML = `
             <h4>${location.LocationName || 'Unknown Location'}</h4>
             <p><strong>State:</strong> ${location.StateDesc || 'N/A'}</p>
-            <p><strong>Value:</strong> ${value.toFixed(1)}${location.Data_Value_Unit || ''}</p>
+            <p><strong>Value:</strong> ${valueDisplay}</p>
             <p><strong>Population:</strong> ${location.TotalPopulation ? location.TotalPopulation.toLocaleString() : 'N/A'}</p>
             <p><strong>Coordinates:</strong> ${location.lat ? location.lat.toFixed(4) : 'N/A'}, ${location.lng ? location.lng.toFixed(4) : 'N/A'}</p>
-            <p><strong>Type:</strong> ${location.Data_Value_Type || 'N/A'}</p>
-            ${location.Low_Confidence_Limit && location.High_Confidence_Limit ? 
-                `<p><strong>Confidence Interval:</strong> ${location.Low_Confidence_Limit.toFixed(1)} - ${location.High_Confidence_Limit.toFixed(1)}</p>` : ''
-            }
         `;
     }
     
@@ -884,12 +893,21 @@ class HealthEquityMap {
         // Calculate summary statistics
         const values = this.currentData.map(d => d.Data_Value).filter(v => !isNaN(v));
         const avgValue = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
-        const minValue = Math.min(...values);
-        const maxValue = Math.max(...values);
         const totalPopulation = this.currentData.reduce((sum, d) => sum + (d.TotalPopulation || 0), 0);
         
         // Calculate quartiles
         const quartiles = this.calculateQuartiles(values);
+        
+        // Calculate outlier-adjusted range using 1.5 IQR rule
+        const q1 = quartiles.q1;
+        const q3 = quartiles.q3;
+        const iqr = q3 - q1;
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+        
+        // Use outlier-adjusted bounds for display
+        const minValue = lowerBound;
+        const maxValue = upperBound;
         
         // Determine if this is a positive or negative measure
         const isPositive = this.isPositiveMeasure(this.currentMeasure);
@@ -902,36 +920,6 @@ class HealthEquityMap {
             <p><strong>Range:</strong> ${minValue.toFixed(1)} - ${maxValue.toFixed(1)}</p>
             <p><strong>Total Population:</strong> ${totalPopulation.toLocaleString()}</p>
             
-            <h5>Value Distribution:</h5>
-            <div class="value-distribution">
-                <div class="gradient-bar" style="
-                    height: 20px; 
-                    background: linear-gradient(to right, ${isPositive ? '#e74c3c' : '#3498db'}, ${isPositive ? '#3498db' : '#e74c3c'}); 
-                    border-radius: 4px; 
-                    margin: 0.5rem 0;
-                    border: 1px solid #ddd;
-                "></div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
-                    <span>${isPositive ? 'Low (Bad)' : 'Low (Good)'}</span>
-                    <span>${isPositive ? 'High (Good)' : 'High (Bad)'}</span>
-                </div>
-                <div class="dist-item">
-                    <span class="dist-color" style="background-color: ${isPositive ? '#e74c3c' : '#3498db'};"></span>
-                    <span>Low (<${quartiles.q1.toFixed(1)}): ${values.filter(v => v < quartiles.q1).length}</span>
-                </div>
-                <div class="dist-item">
-                    <span class="dist-color" style="background-color: ${isPositive ? '#c0392b' : '#2980b9'};"></span>
-                    <span>Medium-Low (${quartiles.q1.toFixed(1)}-${quartiles.q2.toFixed(1)}): ${values.filter(v => v >= quartiles.q1 && v < quartiles.q2).length}</span>
-                </div>
-                <div class="dist-item">
-                    <span class="dist-color" style="background-color: ${isPositive ? '#2980b9' : '#c0392b'};"></span>
-                    <span>Medium-High (${quartiles.q2.toFixed(1)}-${quartiles.q3.toFixed(1)}): ${values.filter(v => v >= quartiles.q2 && v < quartiles.q3).length}</span>
-                </div>
-                <div class="dist-item">
-                    <span class="dist-color" style="background-color: ${isPositive ? '#3498db' : '#e74c3c'};"></span>
-                    <span>High (≥${quartiles.q3.toFixed(1)}): ${values.filter(v => v >= quartiles.q3).length}</span>
-                </div>
-            </div>
             
             <hr>
             <p><em>Click on a location marker to see detailed information.</em></p>
@@ -957,7 +945,7 @@ class HealthEquityMap {
     showError(message) {
         const statsContent = document.getElementById('stats-content');
         statsContent.innerHTML = `
-            <div style="color: #e74c3c; background: #fdf2f2; padding: 1rem; border-radius: 4px; border-left: 4px solid #e74c3c;">
+            <div style="color: #8B0000; background: #fdf2f2; padding: 1rem; border-radius: 4px; border-left: 4px solid #8B0000;">
                 <strong>Error:</strong> ${message}
             </div>
         `;

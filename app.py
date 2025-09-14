@@ -74,6 +74,10 @@ def create_county_locations_summary():
     
     # Create county summary
     counties = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS']].copy()
+    
+    # Ensure CountyFIPS is treated as string to preserve leading zeros
+    counties['CountyFIPS'] = counties['CountyFIPS'].astype(str).str.zfill(5)
+    
     counties['measure_count'] = 28  # All counties have all 28 measures
     counties['location_type'] = 'County'
     

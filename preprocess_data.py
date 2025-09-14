@@ -274,19 +274,92 @@ def create_safe_filename(measure):
     return safe_name[:50] + '.csv'
 
 def preprocess_sdoh_data():
-    """Preprocess SDOH data"""
-    print("\nLoading SDOH data...")
+    """Preprocess SDOH county data"""
+    print("\nLoading SDOH county data...")
     try:
-        df = pd.read_excel('data/SDOH_2020_ZIPCODE_1_0.xlsx')
+        df = pd.read_csv('data/SDOH_2020_COUNTY_1_0_data.csv')
         print(f"SDOH data shape: {df.shape}")
         
-        # Basic cleaning
-        df = df.dropna()
-        df.to_csv('data/sdoh_cleaned.csv', index=False)
-        print(f"Saved {len(df)} SDOH records")
-        return len(df)
+        # Clean the data - remove rows with missing COUNTYFIPS
+        df = df.dropna(subset=['COUNTYFIPS'])
+        
+        # Ensure COUNTYFIPS is 5 digits with leading zeros
+        df['COUNTYFIPS'] = df['COUNTYFIPS'].astype(str).str.zfill(5)
+        
+        # Select key SDOH indicators for mapping
+        key_indicators = {
+            'ACS_MEDIAN_HH_INC': 'Median Household Income',
+            'SAIPE_PCT_POV': 'Poverty Rate',
+            'ACS_PCT_UNINSURED': 'Uninsured Rate',
+            'ACS_PCT_LT_HS': 'Less than High School Education',
+            'ACS_PCT_BACHELOR_DGR': 'Bachelor Degree or Higher',
+            'ACS_PCT_EMPLOYED': 'Employment Rate',
+            'ACS_PCT_UNEMPLOY': 'Unemployment Rate',
+            'ACS_PCT_DISABLE': 'Disability Rate',
+            'ACS_PCT_FOREIGN_BORN': 'Foreign Born Population',
+            'ACS_PCT_HISPANIC': 'Hispanic Population',
+            'ACS_PCT_BLACK': 'Black Population',
+            'ACS_PCT_WHITE': 'White Population',
+            'ACS_PCT_ASIAN': 'Asian Population',
+            'ACS_PCT_AIAN': 'American Indian/Alaska Native Population',
+            'ACS_PCT_OWNER_HU': 'Homeownership Rate',
+            'ACS_PCT_RENTER_HU_COST_30PCT': 'Rent Burden (30%+ income)',
+            'ACS_PCT_HH_INTERNET': 'Internet Access Rate',
+            'ACS_PCT_HH_BROADBAND': 'Broadband Access Rate',
+            'ACS_PCT_DRIVE_2WORK': 'Drive to Work Rate',
+            'ACS_PCT_PUBL_TRANSIT': 'Public Transit to Work Rate',
+            'ACS_PCT_WALK_2WORK': 'Walk to Work Rate',
+            'ACS_PCT_MEDICAID_ANY': 'Medicaid Coverage Rate',
+            'ACS_PCT_PRIVATE_ANY': 'Private Insurance Rate',
+            'ACS_PCT_UNINSURED_BELOW64': 'Uninsured Under 65 Rate',
+            'ACS_PCT_HH_FOOD_STMP': 'Food Stamp/SNAP Usage Rate',
+            'ACS_PCT_HH_PUB_ASSIST': 'Public Assistance Rate',
+            'ACS_GINI_INDEX': 'Income Inequality (Gini Index)',
+            'ACS_PER_CAPITA_INC': 'Per Capita Income',
+            'ACS_MEDIAN_AGE': 'Median Age',
+            'ACS_PCT_AGE_ABOVE65': 'Population 65+ Rate',
+            'ACS_PCT_AGE_0_17': 'Population Under 18 Rate',
+            'CEN_POPDENSITY_COUNTY': 'Population Density',
+            'AHRF_UNEMPLOYED_RATE': 'Unemployment Rate (AHRF)',
+            'AHRF_DAYS_AIR_QLT': 'Air Quality Days',
+            'AHRF_PCT_GOOD_AQ': 'Good Air Quality Days',
+            'AHRF_HPSA_PRIM': 'Primary Care HPSA',
+            'AHRF_HPSA_DENTIST': 'Dental HPSA',
+            'AHRF_HPSA_MENTAL': 'Mental Health HPSA'
+        }
+        
+        # Create a subset with key indicators
+        sdoh_subset = df[['COUNTYFIPS', 'STATE', 'COUNTY'] + list(key_indicators.keys())].copy()
+        
+        # Rename columns for better readability
+        column_mapping = {'COUNTYFIPS': 'CountyFIPS', 'STATE': 'State', 'COUNTY': 'County'}
+        column_mapping.update(key_indicators)
+        sdoh_subset = sdoh_subset.rename(columns=column_mapping)
+        
+        # Save cleaned SDOH data
+        sdoh_subset.to_csv('data/sdoh_county_cleaned.csv', index=False)
+        print(f"Saved {len(sdoh_subset)} SDOH county records")
+        
+        # Create SDOH measures list
+        sdoh_measures = []
+        for col, name in key_indicators.items():
+            if col in sdoh_subset.columns:
+                sdoh_measures.append({
+                    'Measure_Clean': name,
+                    'Measure_Short': name.split('(')[0].strip(),
+                    'SDOH_Column': col,
+                    'Data_Type': 'SDOH'
+                })
+        
+        sdoh_measures_df = pd.DataFrame(sdoh_measures)
+        sdoh_measures_df.to_csv('data/sdoh_measures.csv', index=False)
+        print(f"Saved {len(sdoh_measures)} SDOH measures")
+        
+        return len(sdoh_subset)
     except Exception as e:
         print(f"Error processing SDOH data: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
 def preprocess_county_data():
@@ -336,6 +409,10 @@ def preprocess_county_data():
     # Create county summary
     print("\nCreating county summary...")
     counties = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS']].copy()
+    
+    # Ensure CountyFIPS is treated as string to preserve leading zeros
+    counties['CountyFIPS'] = counties['CountyFIPS'].astype(str).str.zfill(5)
+    
     counties['measure_count'] = 28  # All counties have all 28 measures
     counties['location_type'] = 'County'
     
@@ -351,34 +428,34 @@ def preprocess_county_data():
     
     # Create measure mapping from county columns to measure names
     measure_mapping = {
-        'ACCESS2_CrudePrev': 'Current lack of health insurance among adults aged 18-64 years',
-        'ARTHRITIS_CrudePrev': 'Arthritis among adults aged >=18 years',
-        'BINGE_CrudePrev': 'Binge drinking among adults aged >=18 years',
-        'BPHIGH_CrudePrev': 'High blood pressure among adults aged >=18 years',
-        'BPMED_CrudePrev': 'Taking medicine for high blood pressure control among adults aged >=18 years with high blood pressure',
-        'CANCER_CrudePrev': 'Cancer (excluding skin cancer) among adults aged >=18 years',
-        'CASTHMA_CrudePrev': 'Current asthma among adults aged >=18 years',
-        'CERVICAL_CrudePrev': 'Cervical cancer screening among adult women aged 21-65 years',
-        'CHD_CrudePrev': 'Coronary heart disease among adults aged >=18 years',
-        'CHECKUP_CrudePrev': 'Visits to doctor for routine checkup within the past year among adults aged >=18 years',
-        'CHOLSCREEN_CrudePrev': 'Cholesterol screening among adults aged >=18 years',
-        'COLON_SCREEN_CrudePrev': 'Fecal occult blood test, sigmoidoscopy, or colonoscopy among adults aged 50-75 years',
-        'COPD_CrudePrev': 'Chronic obstructive pulmonary disease among adults aged >=18 years',
-        'COREM_CrudePrev': 'Older adult men aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening',
-        'COREW_CrudePrev': 'Older adult women aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening, and Mammogram past 2 years',
-        'CSMOKING_CrudePrev': 'Current smoking among adults aged >=18 years',
-        'DENTAL_CrudePrev': 'Visits to dentist or dental clinic among adults aged >=18 years',
-        'DIABETES_CrudePrev': 'Diagnosed diabetes among adults aged >=18 years',
-        'HIGHCHOL_CrudePrev': 'High cholesterol among adults aged >=18 years who have been screened in the past 5 years',
-        'KIDNEY_CrudePrev': 'Chronic kidney disease among adults aged >=18 years',
-        'LPA_CrudePrev': 'No leisure-time physical activity among adults aged >=18 years',
-        'MAMMOUSE_CrudePrev': 'Mammography use among women aged 50-74 years',
-        'MHLTH_CrudePrev': 'Mental health not good for >=14 days among adults aged >=18 years',
-        'OBESITY_CrudePrev': 'Obesity among adults aged >=18 years',
-        'PHLTH_CrudePrev': 'Physical health not good for >=14 days among adults aged >=18 years',
-        'SLEEP_CrudePrev': 'Sleeping less than 7 hours among adults aged >=18 years',
-        'STROKE_CrudePrev': 'Stroke among adults aged >=18 years',
-        'TEETHLOST_CrudePrev': 'All teeth lost among adults aged >=65 years'
+        'ACCESS2_AdjPrev': 'Current lack of health insurance among adults aged 18-64 years',
+        'ARTHRITIS_AdjPrev': 'Arthritis among adults aged >=18 years',
+        'BINGE_AdjPrev': 'Binge drinking among adults aged >=18 years',
+        'BPHIGH_AdjPrev': 'High blood pressure among adults aged >=18 years',
+        'BPMED_AdjPrev': 'Taking medicine for high blood pressure control among adults aged >=18 years with high blood pressure',
+        'CANCER_AdjPrev': 'Cancer (excluding skin cancer) among adults aged >=18 years',
+        'CASTHMA_AdjPrev': 'Current asthma among adults aged >=18 years',
+        'CERVICAL_AdjPrev': 'Cervical cancer screening among adult women aged 21-65 years',
+        'CHD_AdjPrev': 'Coronary heart disease among adults aged >=18 years',
+        'CHECKUP_AdjPrev': 'Visits to doctor for routine checkup within the past year among adults aged >=18 years',
+        'CHOLSCREEN_AdjPrev': 'Cholesterol screening among adults aged >=18 years',
+        'COLON_SCREEN_AdjPrev': 'Fecal occult blood test, sigmoidoscopy, or colonoscopy among adults aged 50-75 years',
+        'COPD_AdjPrev': 'Chronic obstructive pulmonary disease among adults aged >=18 years',
+        'COREM_AdjPrev': 'Older adult men aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening',
+        'COREW_AdjPrev': 'Older adult women aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening, and Mammogram past 2 years',
+        'CSMOKING_AdjPrev': 'Current smoking among adults aged >=18 years',
+        'DENTAL_AdjPrev': 'Visits to dentist or dental clinic among adults aged >=18 years',
+        'DIABETES_AdjPrev': 'Diagnosed diabetes among adults aged >=18 years',
+        'HIGHCHOL_AdjPrev': 'High cholesterol among adults aged >=18 years who have been screened in the past 5 years',
+        'KIDNEY_AdjPrev': 'Chronic kidney disease among adults aged >=18 years',
+        'LPA_AdjPrev': 'No leisure-time physical activity among adults aged >=18 years',
+        'MAMMOUSE_AdjPrev': 'Mammography use among women aged 50-74 years',
+        'MHLTH_AdjPrev': 'Mental health not good for >=14 days among adults aged >=18 years',
+        'OBESITY_AdjPrev': 'Obesity among adults aged >=18 years',
+        'PHLTH_AdjPrev': 'Physical health not good for >=14 days among adults aged >=18 years',
+        'SLEEP_AdjPrev': 'Sleeping less than 7 hours among adults aged >=18 years',
+        'STROKE_AdjPrev': 'Stroke among adults aged >=18 years',
+        'TEETHLOST_AdjPrev': 'All teeth lost among adults aged >=65 years'
     }
     
     # Create individual county measure files
@@ -388,11 +465,14 @@ def preprocess_county_data():
     measure_count = 0
     for county_col, measure_name in measure_mapping.items():
         # Get the confidence interval column
-        ci_col = county_col.replace('_CrudePrev', '_Crude95CI')
+        ci_col = county_col.replace('_AdjPrev', '_Adj95CI')
         
         # Create measure data
         measure_data = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', county_col, ci_col]].copy()
         measure_data.columns = ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', 'Data_Value', 'Confidence_Interval']
+        
+        # Ensure CountyFIPS is treated as string to preserve leading zeros
+        measure_data['CountyFIPS'] = measure_data['CountyFIPS'].astype(str).str.zfill(5)
         
         # Parse confidence intervals to get low and high limits
         def parse_confidence_interval(ci_str):
@@ -439,11 +519,14 @@ def preprocess_county_data():
     state_measure_count = 0
     for county_col, measure_name in measure_mapping.items():
         # Get the confidence interval column
-        ci_col = county_col.replace('_CrudePrev', '_Crude95CI')
+        ci_col = county_col.replace('_AdjPrev', '_Adj95CI')
         
         # Create measure data
         measure_data = df[['CountyName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', county_col, ci_col]].copy()
         measure_data.columns = ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 'CountyFIPS', 'Data_Value', 'Confidence_Interval']
+        
+        # Ensure CountyFIPS is treated as string to preserve leading zeros
+        measure_data['CountyFIPS'] = measure_data['CountyFIPS'].astype(str).str.zfill(5)
         
         # Parse confidence intervals
         def parse_confidence_interval(ci_str):
