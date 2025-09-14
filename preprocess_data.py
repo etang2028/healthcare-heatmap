@@ -2,6 +2,7 @@
 """
 Data preprocessing script for Health Equity Heatmap
 Creates smaller, cleaned CSV files for faster loading
+Processes ALL locations and states from the PLACES dataset
 """
 
 import pandas as pd
@@ -12,43 +13,102 @@ import re
 def preprocess_places_data():
     """Preprocess PLACES data into smaller, cleaned files"""
     print("Loading PLACES data...")
+    print("This may take a few minutes for the full dataset...")
+    
+    # Load the full dataset
     df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv')
     
     print(f"Original data shape: {df.shape}")
+    print(f"Total states in dataset: {len(df['StateDesc'].unique())}")
+    print(f"States: {sorted(df['StateDesc'].unique())}")
     
-    # Clean the data
-    print("Cleaning data...")
-    df = df.dropna(subset=['Data_Value', 'Geolocation'])
+    # Clean the data - be more lenient with filtering
+    print("\nCleaning data...")
+    initial_count = len(df)
+    
+    # Only drop rows where both Data_Value and Geolocation are missing
+    df = df.dropna(subset=['Data_Value', 'Geolocation'], how='all')
+    print(f"After dropping rows with both Data_Value and Geolocation missing: {len(df)} (removed {initial_count - len(df)})")
+    
+    # Convert Data_Value to numeric, but keep rows that can't be converted
     df['Data_Value'] = pd.to_numeric(df['Data_Value'], errors='coerce')
     df = df.dropna(subset=['Data_Value'])
+    print(f"After numeric conversion of Data_Value: {len(df)} (removed {initial_count - len(df) - (initial_count - len(df))})")
+    
+    # Extract coordinates with better error handling
+    print("\nExtracting coordinates...")
+    coord_pattern = r'POINT \(([^ ]+) ([^)]+)\)'
     
     # Extract coordinates
-    df['lat'] = df['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[1].astype(float)
-    df['lng'] = df['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[0].astype(float)
-    df = df.dropna(subset=['lat', 'lng'])
+    coord_matches = df['Geolocation'].str.extract(coord_pattern)
+    df['lat'] = coord_matches[1]
+    df['lng'] = coord_matches[0]
     
-    # Clean measure names - keep original but create shorter versions for display
+    # Convert to numeric
+    df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+    df['lng'] = pd.to_numeric(df['lng'], errors='coerce')
+    
+    # Only drop rows where coordinates are invalid
+    valid_coords = df.dropna(subset=['lat', 'lng'])
+    print(f"After coordinate extraction: {len(valid_coords)} (removed {len(df) - len(valid_coords)})")
+    
+    # Check coordinate validity (should be within US bounds roughly)
+    valid_coords = valid_coords[
+        (valid_coords['lat'] >= 24) & (valid_coords['lat'] <= 72) &  # Latitude bounds for US
+        (valid_coords['lng'] >= -180) & (valid_coords['lng'] <= -65)  # Longitude bounds for US
+    ]
+    print(f"After coordinate validation: {len(valid_coords)} (removed {len(df) - len(valid_coords)})")
+    
+    df = valid_coords
+    
+    print(f"Final cleaned data shape: {df.shape}")
+    print(f"States after cleaning: {len(df['StateDesc'].unique())}")
+    print(f"States: {sorted(df['StateDesc'].unique())}")
+    
+    # Clean measure names
+    print("\nProcessing measure names...")
     df['Measure_Clean'] = df['Measure'].str.strip()
-    df['Measure_Short'] = df['Measure'].apply(create_short_measure_name)
     
-    print(f"Cleaned data shape: {df.shape}")
+    # Use Short_Question_Text if available, otherwise create short names
+    df['Measure_Short'] = df['Short_Question_Text'].fillna(df['Measure_Clean'].apply(create_short_measure_name))
     
-    # Create location summary
+    # Create location summary - include ALL locations
+    print("\nCreating location summary...")
+    
+    # Convert TotalPopulation to numeric, handling comma-separated values
+    print("Converting TotalPopulation to numeric...")
+    df['TotalPopulation'] = df['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+    
     locations = df.groupby(['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation']).size().reset_index(name='measure_count')
     
     # Save locations summary
     locations.to_csv('data/locations_summary.csv', index=False)
     print(f"Saved {len(locations)} locations to locations_summary.csv")
     
-    # Create measures list with both full and short names
+    # Show location counts by state
+    print("\nLocation counts by state:")
+    state_counts = locations['StateDesc'].value_counts()
+    for state, count in state_counts.head(20).items():
+        print(f"  {state}: {count} locations")
+    
+    if len(state_counts) > 20:
+        print(f"  ... and {len(state_counts) - 20} more states")
+    
+    # Create measures list
     measures_df = df[['Measure_Clean', 'Measure_Short']].drop_duplicates().reset_index(drop=True)
     measures_df.to_csv('data/available_measures.csv', index=False)
-    print(f"Saved {len(measures_df)} measures to available_measures.csv")
+    print(f"\nSaved {len(measures_df)} measures to available_measures.csv")
+    
+    # Show sample measures
+    print("\nSample measures:")
+    for i, row in measures_df.head(10).iterrows():
+        print(f"  {row['Measure_Short']}")
     
     # Create individual measure files for faster loading
-    print("Creating individual measure files...")
+    print("\nCreating individual measure files...")
     os.makedirs('data/measures', exist_ok=True)
     
+    measure_count = 0
     for measure in df['Measure_Clean'].unique():
         measure_data = df[df['Measure_Clean'] == measure][
             ['LocationName', 'lat', 'lng', 'StateDesc', 'TotalPopulation', 
@@ -56,10 +116,18 @@ def preprocess_places_data():
              'Low_Confidence_Limit', 'High_Confidence_Limit', 'Measure_Short']
         ].copy()
         
+        # Ensure TotalPopulation is numeric in measure files too
+        measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+        
         # Create safe filename
         safe_filename = create_safe_filename(measure)
         measure_data.to_csv(f'data/measures/{safe_filename}', index=False)
-        print(f"Saved {len(measure_data)} records for: {measure[:50]}...")
+        measure_count += 1
+        
+        if measure_count % 10 == 0:
+            print(f"  Processed {measure_count} measures...")
+    
+    print(f"Created {measure_count} individual measure files")
     
     return len(measures_df), len(locations)
 
@@ -70,10 +138,12 @@ def create_short_measure_name(measure):
     
     # Common health conditions
     conditions = ['asthma', 'diabetes', 'cancer', 'heart disease', 'high blood pressure', 
-                 'high cholesterol', 'obesity', 'smoking', 'drinking', 'arthritis', 'copd']
+                 'high cholesterol', 'obesity', 'smoking', 'drinking', 'arthritis', 'copd',
+                 'stroke', 'kidney', 'mental health', 'depression', 'anxiety']
     
     # Common actions
-    actions = ['screening', 'checkup', 'visit', 'control', 'medication', 'vaccination']
+    actions = ['screening', 'checkup', 'visit', 'control', 'medication', 'vaccination',
+               'testing', 'monitoring', 'treatment']
     
     measure_lower = measure.lower()
     
@@ -103,7 +173,7 @@ def create_safe_filename(measure):
 
 def preprocess_sdoh_data():
     """Preprocess SDOH data"""
-    print("Loading SDOH data...")
+    print("\nLoading SDOH data...")
     try:
         df = pd.read_excel('data/SDOH_2020_ZIPCODE_1_0.xlsx')
         print(f"SDOH data shape: {df.shape}")
@@ -120,6 +190,7 @@ def preprocess_sdoh_data():
 def main():
     """Main preprocessing function"""
     print("Starting data preprocessing...")
+    print("=" * 60)
     
     # Create data directory
     os.makedirs('data', exist_ok=True)
@@ -130,9 +201,9 @@ def main():
     # Process SDOH data
     sdoh_count = preprocess_sdoh_data()
     
-    print("\n" + "="*50)
+    print("\n" + "=" * 60)
     print("PREPROCESSING COMPLETE!")
-    print("="*50)
+    print("=" * 60)
     print(f"Locations processed: {location_count}")
     print(f"Measures processed: {measure_count}")
     print(f"SDOH records: {sdoh_count}")

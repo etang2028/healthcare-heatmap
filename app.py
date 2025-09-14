@@ -17,11 +17,15 @@ def load_locations_data():
     if locations_data is None:
         try:
             locations_data = pd.read_csv('data/locations_summary.csv')
+            # Ensure TotalPopulation is numeric (handle comma-separated values)
+            locations_data['TotalPopulation'] = locations_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
             print(f"Loaded {len(locations_data)} locations from cache")
         except FileNotFoundError:
             print("Locations summary not found, creating from raw data...")
             create_locations_summary()
             locations_data = pd.read_csv('data/locations_summary.csv')
+            # Ensure TotalPopulation is numeric (handle comma-separated values)
+            locations_data['TotalPopulation'] = locations_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
     return locations_data
 
 def load_measures_data():
@@ -41,8 +45,8 @@ def create_locations_summary():
     """Create locations summary from raw data (one-time setup)"""
     print("Creating locations summary from raw data...")
     
-    # Load a sample of the data to create locations
-    df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv', nrows=100000)
+    # Load the full dataset
+    df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv')
     
     # Clean data
     df = df.dropna(subset=['Data_Value', 'Geolocation'])
@@ -66,8 +70,8 @@ def create_measures_list():
     """Create measures list from raw data (one-time setup)"""
     print("Creating measures list from raw data...")
     
-    # Load a sample of the data to get measures
-    df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv', nrows=50000)
+    # Load the full dataset to get all measures
+    df = pd.read_csv('data/PLACES__Local_Data_for_Better_Health,_Place_Data_2020_release_20250913.csv')
     
     # Get unique measures and create short names
     measures = df['Measure'].unique()
@@ -154,7 +158,9 @@ def get_measure_data(measure_name):
         if os.path.exists(measure_file):
             # Load from preprocessed file
             measure_data = pd.read_csv(measure_file)
-            print(f"Loaded {len(measure_data)} records from preprocessed file")
+            # Ensure TotalPopulation is numeric (handle comma-separated values)
+            measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+            print(f"Loaded {len(measure_data)} records from preprocessed file: {measure_file}")
         else:
             # Load from raw data and filter for specific measure
             print(f"Loading from raw data for measure: {measure_name}")
@@ -171,6 +177,9 @@ def get_measure_data(measure_name):
             measure_data['Data_Value'] = pd.to_numeric(measure_data['Data_Value'], errors='coerce')
             measure_data = measure_data.dropna(subset=['Data_Value'])
             
+            # Convert TotalPopulation to numeric, handling comma-separated values
+            measure_data['TotalPopulation'] = measure_data['TotalPopulation'].astype(str).str.replace(',', '').astype(float)
+            
             # Extract coordinates
             measure_data['lat'] = measure_data['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[1].astype(float)
             measure_data['lng'] = measure_data['Geolocation'].str.extract(r'POINT \(([^ ]+) ([^)]+)\)')[0].astype(float)
@@ -183,8 +192,10 @@ def get_measure_data(measure_name):
             'Low_Confidence_Limit', 'High_Confidence_Limit'
         ]].to_dict('records')
         
+        print(f"Returning {len(result)} data points for measure: {measure_name}")
         return jsonify(result)
     except Exception as e:
+        print(f"Error loading measure data: {e}")
         return jsonify({"error": str(e)}), 500
 
 def create_safe_filename(measure):

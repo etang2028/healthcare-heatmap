@@ -1,29 +1,29 @@
 Measure_Clean,Measure_Short
-Taking medicine for high blood pressure control among adults aged >=18 years with high blood pressure,High Blood Pressure - Control
-Cancer (excluding skin cancer) among adults aged >=18 years,Cancer
-Current asthma among adults aged >=18 years,Asthma
-Cervical cancer screening among adult women aged 21-65 years,Cancer - Screening
-Coronary heart disease among adults aged >=18 years,Heart Disease
-Visits to doctor for routine checkup within the past year among adults aged >=18 years,Checkup - Visit
-Cholesterol screening among adults aged >=18 years,Screening
-"Fecal occult blood test, sigmoidoscopy, or colonoscopy among adults aged 50-75 years",Fecal - Occult - Blood
-Chronic obstructive pulmonary disease among adults aged >=18 years,Chronic - Obstructive - Pulmonary
-"Older adult men aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening",Cancer - Screening
-"Older adult women aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening, and Mammogram past 2 years",Cancer - Screening
-Current smoking among adults aged >=18 years,Smoking
-Visits to dentist or dental clinic among adults aged >=18 years,Visit
+Taking medicine for high blood pressure control among adults aged >=18 years with high blood pressure,Taking BP Medication
+Cancer (excluding skin cancer) among adults aged >=18 years,Cancer (except skin)
+Current asthma among adults aged >=18 years,Current Asthma
+Cervical cancer screening among adult women aged 21-65 years,Cervical Cancer Screening
+Coronary heart disease among adults aged >=18 years,Coronary Heart Disease
+Visits to doctor for routine checkup within the past year among adults aged >=18 years,Annual Checkup
+Cholesterol screening among adults aged >=18 years,Cholesterol Screening
+"Fecal occult blood test, sigmoidoscopy, or colonoscopy among adults aged 50-75 years",Colorectal Cancer Screening
+Chronic obstructive pulmonary disease among adults aged >=18 years,COPD
+"Older adult men aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening",Core preventive services for older men
+"Older adult women aged >=65 years who are up to date on a core set of clinical preventive services: Flu shot past year, PPV shot ever, Colorectal cancer screening, and Mammogram past 2 years",Core preventive services for older women
+Current smoking among adults aged >=18 years,Current Smoking
+Visits to dentist or dental clinic among adults aged >=18 years,Dental Visit
 Diagnosed diabetes among adults aged >=18 years,Diabetes
 High cholesterol among adults aged >=18 years who have been screened in the past 5 years,High Cholesterol
-Chronic kidney disease among adults aged >=18 years,Chronic - Kidney - Disease
-No leisure-time physical activity among adults aged >=18 years,Leisure-Time - Physical - Activity
-Mammography use among women aged 50-74 years,Mammography - Use - Among
-Mental health not good for >=14 days among adults aged >=18 years,Mental - Health - Not
+Chronic kidney disease among adults aged >=18 years,Chronic Kidney Disease
+No leisure-time physical activity among adults aged >=18 years,Physical Inactivity
+Mammography use among women aged 50-74 years,Mammography
+Mental health not good for >=14 days among adults aged >=18 years,Mental Health
 Obesity among adults aged >=18 years,Obesity
-Physical health not good for >=14 days among adults aged >=18 years,Physical - Health - Not
-Sleeping less than 7 hours among adults aged >=18 years,Sleeping - Less - Than
-Stroke among adults aged >=18 years,Stroke - Among - Adults
-All teeth lost among adults aged >=65 years,All - Teeth - Lost
-Current lack of health insurance among adults aged 18-64 years,Current - Lack - Health
+Physical health not good for >=14 days among adults aged >=18 years,Physical Health
+Sleeping less than 7 hours among adults aged >=18 years,Sleep <7 hours
+Stroke among adults aged >=18 years,Stroke
+All teeth lost among adults aged >=65 years,Teeth Loss
+Current lack of health insurance among adults aged 18-64 years,Health Insurance
 Arthritis among adults aged >=18 years,Arthritis
-Binge drinking among adults aged >=18 years,Drinking
+Binge drinking among adults aged >=18 years,Binge Drinking
 High blood pressure among adults aged >=18 years,High Blood Pressure
